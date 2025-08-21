@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#dc2626">
+    <title>SR & SONS - Kitchen Catalog</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Data Manager Script -->
+    <script src="js/database.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #dc2626, #b91c1c);
+            color: white;
+            padding: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .add-btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .add-btn:hover {
+            background: white;
+            color: #dc2626;
+            transform: translateY(-2px);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        .search-filter {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #dc2626;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            background: linear-gradient(90deg, #374151, #4b5563);
+            color: white;
+            padding: 1rem 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .table td {
+            padding: 1rem 0.5rem;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
+        }
+
+        .table tr:hover {
+            background: #f9fafb;
+            transform: scale(1.01);
+            transition: all 0.3s ease;
+        }
+
+        .product-image {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .product-name {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 0.9rem;
+            line-height: 1.3;
+        }
+
+        .category {
+            color: #6b7280;
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+
+        .price {
+            font-weight: bold;
+            color: #dc2626;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid #dc2626;
+            background: white;
+            color: #dc2626;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .page-btn:hover, .page-btn.active {
+            background: #dc2626;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #f3f4f6;
+            color: #dc2626;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #dc2626;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            display: block;
+            padding: 1rem;
+            border: 2px dashed #dc2626;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            background: #fef2f2;
+            color: #dc2626;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .file-label:hover {
+            background: #fecaca;
+            transform: translateY(-2px);
+        }
+
+        .image-preview {
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .preview-img {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: 10px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #b91c1c;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #dc2626;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .loading {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            z-index: 1001;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #dc2626;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .success-message {
+            background: #10b981;
+            color: white;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .btn-edit, .btn-delete {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-edit:hover {
+            background: #dbeafe;
+            transform: scale(1.1);
+        }
+
+        .btn-delete:hover {
+            background: #fee2e2;
+            transform: scale(1.1);
+        }
+
+        .modal-title {
+            margin: 0;
+            color: #374151;
+        }
+
+        .edit-mode .modal-title {
+            color: #dc2626;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .table th,
+            .table td {
+                padding: 0.5rem 0.25rem;
+                font-size: 0.8rem;
+            }
+
+            .product-image {
+                width: 40px;
+                height: 40px;
+            }
+
+            .modal-content {
+                margin: 1rem;
+                width: calc(100% - 2rem);
+                padding: 1.5rem;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
+
+            .header-content {
+                justify-content: center;
+                text-align: center;
+            }
+
+            .logo {
+                font-size: 1.2rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+
+            .btn-edit, .btn-delete {
+                font-size: 1rem;
+                padding: 0.3rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .table th,
+            .table td {
+                padding: 0.3rem 0.15rem;
+                font-size: 0.75rem;
+            }
+
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .stat-number {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">
+                SR & SONS
+            </div>
+            <button class="add-btn" onclick="openAddModal()">
+                ➕ Add Product
+            </button>
+            <button class="add-btn" onclick="exportDatabase()" style="margin-left: 1rem;">
+                📥 Export Database
+            </button>
+            <button class="add-btn" onclick="importDatabase()" style="margin-left: 1rem;">
+                📤 Import Database
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalProducts">0</div>
+                <div class="stat-label">Total Products</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalCategories">0</div>
+                <div class="stat-label">Categories</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgPrice">₹0</div>
+                <div class="stat-label">Avg Price</div>
+            </div>
+        </div>
+
+        <div class="search-filter">
+            <input type="text" class="search-input" placeholder="🔍 Search products by name or category..." 
+                   onkeyup="filterProducts()" id="searchInput">
+        </div>
+
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Image</th>
+                        <th>Product Details</th>
+                        <th>GST</th>
+                        <th>Master</th>
+                        <th>Inner</th>
+                        <th>MRP</th>
+                        <th>DP</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="productTable">
+                    <!-- Products will be populated here -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination" id="pagination">
+            <!-- Pagination will be populated here -->
+        </div>
+    </div>
+
+    <!-- Add Product Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Add New Product</h2>
+                <button class="close-btn" onclick="closeAddModal()">&times;</button>
+            </div>
+            
+            <div id="successMessage" style="display: none;" class="success-message">
+                Product added successfully!
+            </div>
+
+            <form id="addProductForm">
+                <div class="form-group">
+                    <label class="form-label">Product Image</label>
+                    <div class="file-upload">
+                        <input type="file" class="file-input" id="productImage" accept="image/*" onchange="previewImage()">
+                        <label for="productImage" class="file-label">
+                            📸 Click to upload image or drag & drop
+                        </label>
+                        <div class="image-preview" id="imagePreview"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Product Name</label>
+                    <input type="text" class="form-input" id="productName" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <select class="form-input" id="productCategory" required>
+                        <option value="">Select Category</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">GST (%)</label>
+                    <input type="number" class="form-input" id="productGST" value="18" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Master (Nos)</label>
+                    <input type="number" class="form-input" id="productMaster" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Inner (Nos)</label>
+                    <input type="number" class="form-input" id="productInner" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">MRP (₹)</label>
+                    <input type="number" class="form-input" id="productMRP" step="0.01" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">DP (₹)</label>
+                    <input type="number" class="form-input" id="productDP" step="0.01" required>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Add Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div>Processing...</div>
+    </div>
+
+    <script>
+        // Global variables
+        let products = [];
+        let filteredProducts = [];
+        let currentPage = 1;
+        const itemsPerPage = 20;
+        let editingProductId = null;
+
+        async function renderProducts() {
+            const tbody = document.getElementById('productTable');
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const currentProducts = filteredProducts.slice(startIndex, endIndex);
+
+            const rows = currentProducts.map((product, index) => {
+                // Get image source - handle both stored images and external URLs
+                let imageSrc = 'https://via.placeholder.com/150?text=No+Image';
+                if (product.image_path && product.image_path.startsWith('sale-data/')) {
+                    // This is a stored image, get the base64 data
+                    const imageData = databaseManager.getImageData(product.id);
+                    if (imageData && imageData.base64_data) {
+                        imageSrc = imageData.base64_data;
+                    }
+                }
+                
+                return `
+                    <tr class="fade-in">
+                        <td>${startIndex + index + 1}</td>
+                        <td>
+                            <img src="${imageSrc}" alt="${product.name}" class="product-image" onerror="this.src='https://via.placeholder.com/150?text=Error'">
+                        </td>
+                        <td>
+                            <div class="product-name">${product.name}</div>
+                            <div class="category">Category: ${product.category}</div>
+                        </td>
+                        <td>${product.gst}%</td>
+                        <td>${product.master} Nos</td>
+                        <td>${product.inner} Nos</td>
+                        <td class="price">₹${product.mrp}</td>
+                        <td class="price">₹${product.dp}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-edit" onclick="editProduct(${product.id})" title="Edit">
+                                    ✏️
+                                </button>
+                                <button class="btn-delete" onclick="deleteProduct(${product.id})" title="Delete">
+                                    🗑️
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = rows.join('');
+
+            renderPagination();
+            updateStats();
+        }
+
+        function renderPagination() {
+            const pagination = document.getElementById('pagination');
+            const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            // Ensure current page is within valid range
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+
+            let paginationHTML = `
+                <button class="page-btn" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+                    ‹ Previous
+                </button>
+            `;
+
+            // Show page numbers with ellipsis for large page counts
+            const maxVisiblePages = 7;
+            if (totalPages <= maxVisiblePages) {
+                // Show all pages if total is small
+                for (let i = 1; i <= totalPages; i++) {
+                    paginationHTML += `
+                        <button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">
+                            ${i}
+                        </button>
+                    `;
+                }
+            } else {
+                // Show first page
+                paginationHTML += `
+                    <button class="page-btn ${1 === currentPage ? 'active' : ''}" onclick="changePage(1)">
+                        1
+                    </button>
+                `;
+
+                // Show ellipsis if needed
+                if (currentPage > 3) {
+                    paginationHTML += '<span>...</span>';
+                }
+
+                // Show pages around current page
+                const start = Math.max(2, currentPage - 1);
+                const end = Math.min(totalPages - 1, currentPage + 1);
+                
+                for (let i = start; i <= end; i++) {
+                    paginationHTML += `
+                        <button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">
+                            ${i}
+                        </button>
+                    `;
+                }
+
+                // Show ellipsis if needed
+                if (currentPage < totalPages - 2) {
+                    paginationHTML += '<span>...</span>';
+                }
+
+                // Show last page
+                if (totalPages > 1) {
+                    paginationHTML += `
+                        <button class="page-btn ${totalPages === currentPage ? 'active' : ''}" onclick="changePage(${totalPages})">
+                            ${totalPages}
+                        </button>
+                    `;
+                }
+            }
+
+            paginationHTML += `
+                <button class="page-btn" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+                    Next ›
+                </button>
+            `;
+
+            const startIndex = (currentPage - 1) * itemsPerPage + 1;
+            const endIndex = Math.min(currentPage * itemsPerPage, filteredProducts.length);
+            
+            pagination.innerHTML = `
+                <div style="width: 100%; text-align: center; margin-bottom: 1rem; color: #6b7280; font-size: 0.9rem;">
+                    Showing ${startIndex}-${endIndex} of ${filteredProducts.length} products
+                </div>
+                ${paginationHTML}
+            `;
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+            if (page >= 1 && page <= totalPages) {
+                currentPage = page;
+                renderProducts();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function filterProducts() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            if (searchTerm.trim() === '') {
+                filteredProducts = [...products];
+            } else {
+                filteredProducts = databaseManager.searchProducts(searchTerm);
+            }
+            currentPage = 1;
+            renderProducts();
+        }
+
+        function updateStats() {
+            const stats = databaseManager.getStats();
+            document.getElementById('totalProducts').textContent = stats.totalProducts;
+            document.getElementById('totalCategories').textContent = stats.totalCategories;
+            document.getElementById('avgPrice').textContent = `₹${stats.avgPrice}`;
+        }
+
+        function openAddModal() {
+            document.getElementById('addModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            document.getElementById('addProductForm').reset();
+            document.getElementById('imagePreview').innerHTML = '';
+            document.getElementById('successMessage').style.display = 'none';
+            
+            // Reset edit mode
+            editingProductId = null;
+            document.getElementById('modalTitle').textContent = 'Add New Product';
+            document.getElementById('submitBtn').textContent = 'Add Product';
+            document.getElementById('addModal').classList.remove('edit-mode');
+        }
+
+        // Export database
+        function exportDatabase() {
+            try {
+                databaseManager.exportDatabase();
+                showSuccess('Database exported successfully!');
+            } catch (error) {
+                console.error('Error exporting database:', error);
+                alert('Failed to export database. Please try again.');
+            }
+        }
+
+        // Import database
+        function importDatabase() {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.db,.sqlite,.sqlite3';
+            fileInput.style.display = 'none';
+            
+            fileInput.onchange = async function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    showLoading();
+                    const success = await databaseManager.importDatabase(file);
+                    
+                    if (success) {
+                        // Refresh the application
+                        products = databaseManager.getAllProducts();
+                        filteredProducts = [...products];
+                        currentPage = 1;
+                        renderProducts();
+                        updateStats();
+                        updateCategoryOptions();
+                        showSuccess('Database imported successfully!');
+                    } else {
+                        alert('Failed to import database. Please check the file format.');
+                    }
+                } catch (error) {
+                    console.error('Error importing database:', error);
+                    alert('Failed to import database. Please try again.');
+                } finally {
+                    hideLoading();
+                }
+                
+                // Clean up
+                document.body.removeChild(fileInput);
+            };
+            
+            document.body.appendChild(fileInput);
+            fileInput.click();
+        }
+
+        function previewImage() {
+            const file = document.getElementById('productImage').files[0];
+            const preview = document.getElementById('imagePreview');
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}" class="preview-img" alt="Preview">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                preview.innerHTML = '';
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showSuccess(message = 'Product added successfully!') {
+            const successMsg = document.getElementById('successMessage');
+            successMsg.textContent = message;
+            successMsg.style.display = 'block';
+            setTimeout(() => {
+                successMsg.style.display = 'none';
+            }, 3000);
+        }
+
+        function updateCategoryOptions() {
+            const categories = databaseManager.getAllCategories();
+            const select = document.getElementById('productCategory');
+            select.innerHTML = '<option value="">Select Category</option>';
+            categories.forEach(category => {
+                select.innerHTML += `<option value="${category}">${category}</option>`;
+            });
+        }
+
+        async function editProduct(productId) {
+            const product = databaseManager.getProductById(productId);
+            if (!product) {
+                alert('Product not found!');
+                return;
+            }
+
+            editingProductId = productId;
+            
+            // Update modal title and button
+            document.getElementById('modalTitle').textContent = 'Edit Product';
+            document.getElementById('submitBtn').textContent = 'Update Product';
+            document.getElementById('addModal').classList.add('edit-mode');
+
+            // Fill form with product data
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productCategory').value = product.category;
+            document.getElementById('productGST').value = product.gst;
+            document.getElementById('productMaster').value = product.master;
+            document.getElementById('productInner').value = product.inner;
+            document.getElementById('productMRP').value = product.mrp;
+            document.getElementById('productDP').value = product.dp;
+
+            // Show current image - handle both stored and external images
+            let imageSrc = 'https://via.placeholder.com/150?text=No+Image';
+            if (product.image_path && product.image_path.startsWith('sale-data/')) {
+                const imageData = databaseManager.getImageData(productId);
+                if (imageData && imageData.base64_data) {
+                    imageSrc = imageData.base64_data;
+                }
+            }
+            document.getElementById('imagePreview').innerHTML = `<img src="${imageSrc}" class="preview-img" alt="Current Image">`;
+
+            // Open modal
+            openAddModal();
+        }
+
+        async function deleteProduct(productId) {
+            if (!confirm('Are you sure you want to delete this product?')) {
+                return;
+            }
+
+            try {
+                showLoading();
+                await databaseManager.deleteProduct(productId);
+                products = databaseManager.getAllProducts();
+                filteredProducts = [...products];
+                currentPage = 1;
+                renderProducts();
+                updateStats();
+                updateCategoryOptions();
+                showSuccess('Product deleted successfully!');
+            } catch (error) {
+                console.error('Error deleting product:', error);
+                alert('Failed to delete product. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Add/Edit product form submission
+        document.getElementById('addProductForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            showLoading();
+            
+            setTimeout(() => {
+                if (editingProductId) {
+                    updateProductInList();
+                } else {
+                    addProductToList();
+                }
+                
+                hideLoading();
+            }, 1000);
+        });
+
+        async function addProductToList() {
+            const fileInput = document.getElementById('productImage');
+            const imageFile = fileInput.files[0];
+            
+            const newProduct = {
+                name: document.getElementById('productName').value,
+                category: document.getElementById('productCategory').value,
+                gst: parseInt(document.getElementById('productGST').value),
+                master: parseInt(document.getElementById('productMaster').value),
+                inner: parseInt(document.getElementById('productInner').value),
+                mrp: parseFloat(document.getElementById('productMRP').value),
+                dp: parseFloat(document.getElementById('productDP').value)
+            };
+
+            try {
+                // Add product to database
+                const addedProduct = await databaseManager.addProduct(newProduct);
+                
+                // Save image if provided
+                if (imageFile) {
+                    await databaseManager.saveImage(imageFile, addedProduct.id);
+                }
+                
+                // Refresh products list
+                products = databaseManager.getAllProducts();
+                filteredProducts = [...products];
+                currentPage = 1;
+                renderProducts();
+                updateStats();
+                updateCategoryOptions();
+                showSuccess('Product added successfully!');
+                
+                // Clear form and close modal
+                closeAddModal();
+            } catch (error) {
+                console.error('Error adding product:', error);
+                alert('Failed to add product. Please try again.');
+            }
+        }
+
+        async function updateProductInList() {
+            const fileInput = document.getElementById('productImage');
+            const imageFile = fileInput.files[0];
+            
+            const updatedProduct = {
+                name: document.getElementById('productName').value,
+                category: document.getElementById('productCategory').value,
+                gst: parseInt(document.getElementById('productGST').value),
+                master: parseInt(document.getElementById('productMaster').value),
+                inner: parseInt(document.getElementById('productInner').value),
+                mrp: parseFloat(document.getElementById('productMRP').value),
+                dp: parseFloat(document.getElementById('productDP').value)
+            };
+
+            try {
+                // Update product in database
+                await databaseManager.updateProduct(editingProductId, updatedProduct);
+                
+                // Save new image if provided
+                if (imageFile) {
+                    await databaseManager.saveImage(imageFile, editingProductId);
+                }
+                
+                // Refresh products list
+                products = databaseManager.getAllProducts();
+                filteredProducts = [...products];
+                renderProducts();
+                updateStats();
+                updateCategoryOptions();
+                showSuccess('Product updated successfully!');
+                
+                // Clear form and close modal
+                closeAddModal();
+            } catch (error) {
+                console.error('Error updating product:', error);
+                alert('Failed to update product. Please try again.');
+            }
+        }
+
+        // Drag and drop functionality
+        function setupDragAndDrop() {
+            const fileLabel = document.querySelector('.file-label');
+            const fileInput = document.getElementById('productImage');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                fileLabel.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                fileLabel.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                fileLabel.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight(e) {
+                fileLabel.style.background = '#fecaca';
+                fileLabel.style.borderColor = '#b91c1c';
+            }
+
+            function unhighlight(e) {
+                fileLabel.style.background = '#fef2f2';
+                fileLabel.style.borderColor = '#dc2626';
+            }
+
+            fileLabel.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    previewImage();
+                }
+            }
+        }
+
+        // PWA Installation
+        let deferredPrompt;
+        let installButton = null;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Only show install button if it doesn't exist and app is not already installed
+            if (!installButton && !window.matchMedia('(display-mode: standalone)').matches) {
+                installButton = document.createElement('button');
+                installButton.textContent = '📱 Install App';
+                installButton.className = 'add-btn';
+                installButton.style.marginLeft = '1rem';
+                installButton.onclick = installPWA;
+                document.querySelector('.header-content').appendChild(installButton);
+            }
+        });
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((result) => {
+                    deferredPrompt = null;
+                    // Remove install button after installation attempt
+                    if (installButton) {
+                        installButton.remove();
+                        installButton = null;
+                    }
+                });
+            }
+        }
+
+        // Hide install button if app is already installed
+        window.addEventListener('load', () => {
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                if (installButton) {
+                    installButton.remove();
+                    installButton = null;
+                }
+            }
+        });
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'n') {
+                e.preventDefault();
+                openAddModal();
+            }
+            if (e.key === 'Escape') {
+                closeAddModal();
+            }
+        });
+
+        // Touch gestures for mobile
+        let startX = 0;
+        let startY = 0;
+
+        document.addEventListener('touchstart', function(e) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        });
+
+        document.addEventListener('touchend', function(e) {
+            if (!startX || !startY) return;
+
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+
+            const diffX = startX - endX;
+            const diffY = startY - endY;
+
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                if (diffX > 0) {
+                    // Swipe left - next page
+                    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+                    if (currentPage < totalPages) {
+                        changePage(currentPage + 1);
+                    }
+                } else {
+                    // Swipe right - previous page
+                    if (currentPage > 1) {
+                        changePage(currentPage - 1);
+                    }
+                }
+            }
+
+            startX = 0;
+            startY = 0;
+        });
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Initialize database
+                await databaseManager.init();
+                
+                // Load data from database
+                products = databaseManager.getAllProducts();
+                filteredProducts = [...products];
+                
+                console.log('App initialized with', products.length, 'products');
+                
+                renderProducts();
+                setupDragAndDrop();
+                
+                // Update category options
+                updateCategoryOptions();
+
+                // Check if app is already installed and hide install button
+                if (window.matchMedia('(display-mode: standalone)').matches) {
+                    if (installButton) {
+                        installButton.remove();
+                        installButton = null;
+                    }
+                }
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                alert('Failed to load data. Please refresh the page.');
+            }
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(e) {
+            const modal = document.getElementById('addModal');
+            if (e.target === modal) {
+                closeAddModal();
+            }
+        });
+
+        // Responsive table scroll indicator
+        function checkTableScroll() {
+            const tableContainer = document.querySelector('.table-container');
+            if (tableContainer.scrollWidth > tableContainer.clientWidth) {
+                tableContainer.style.borderRight = '3px solid #dc2626';
+            }
+        }
+
+        window.addEventListener('resize', checkTableScroll);
+        window.addEventListener('load', checkTableScroll);
+    </script>
+</body>
+</html>
