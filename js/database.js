@@ -502,7 +502,10 @@ class DatabaseManager {
 
     getImageByImageId(imageId) {
         try {
+            console.log('Getting image by image_id:', imageId);
             const result = this.db.exec('SELECT * FROM images WHERE image_id = ?', [imageId]);
+            console.log('Image query result:', result);
+            
             if (result.length > 0 && result[0].values.length > 0) {
                 const row = result[0].values[0];
                 const columns = result[0].columns;
@@ -512,8 +515,16 @@ class DatabaseManager {
                     imageData[col] = row[index];
                 });
                 
+                console.log('Image data found:', {
+                    imageId: imageData.image_id,
+                    hasBase64: !!imageData.base64_data,
+                    base64Length: imageData.base64_data ? imageData.base64_data.length : 0,
+                    fileName: imageData.file_name
+                });
+                
                 return imageData;
             }
+            console.log('No image found for image_id:', imageId);
             return null;
         } catch (error) {
             console.error('Error getting image by image_id:', error);
