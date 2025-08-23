@@ -563,6 +563,9 @@
             <button class="add-btn" onclick="forceRefreshDatabase()" style="margin-left: 1rem;">
                 🔄 Refresh DB
             </button>
+            <button class="add-btn" onclick="forceSchemaUpdate()" style="margin-left: 1rem;">
+                🔧 Update Schema
+            </button>
 
         </div>
     </div>
@@ -1025,6 +1028,8 @@
                 
                 request.onsuccess = () => {
                     console.log('IndexedDB cleared successfully');
+                    // Also clear localStorage for good measure
+                    localStorage.removeItem('inventory-database');
                     // Reload the page
                     location.reload();
                 };
@@ -1036,6 +1041,25 @@
             } catch (error) {
                 console.error('Error refreshing database:', error);
                 alert('Error refreshing database. Please refresh the page manually.');
+            }
+        }
+
+        // Force database schema update
+        async function forceSchemaUpdate() {
+            try {
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
+                // Force schema migration
+                await window.databaseManager.migrateDatabaseSchema();
+                
+                // Refresh the page to show updated data
+                location.reload();
+            } catch (error) {
+                console.error('Error updating schema:', error);
+                alert('Error updating database schema. Please try refreshing the page.');
             }
         }
 
@@ -1297,6 +1321,12 @@
             }
 
             try {
+                // Check if database manager is initialized
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
                 showLoading();
                 await databaseManager.deleteProduct(productId);
                 products = databaseManager.getAllProducts();
@@ -1332,6 +1362,12 @@
 
         async function addProductToList() {
             try {
+                // Check if database manager is initialized
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
                 // Validate required fields with specific error messages
                 const productName = document.getElementById('productName').value.trim();
                 const companyName = document.getElementById('companyName').value.trim();
@@ -1418,6 +1454,12 @@
 
         async function updateProductInList() {
             try {
+                // Check if database manager is initialized
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
                 // Validate required fields with specific error messages
                 const productName = document.getElementById('productName').value.trim();
                 const companyName = document.getElementById('companyName').value.trim();
@@ -1657,8 +1699,17 @@
         // Initialize app
         document.addEventListener('DOMContentLoaded', async function() {
             try {
-                // Initialize database
-                await databaseManager.init();
+                // Wait for database manager to be initialized
+                let attempts = 0;
+                while (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                    if (attempts > 50) { // 5 seconds timeout
+                        throw new Error('Database initialization timeout');
+                    }
+                }
+                
+                console.log('Database manager is ready, loading data...');
                 
                 // Load data from database
                 products = databaseManager.getAllProducts();
@@ -1728,6 +1779,11 @@
 
         window.addEventListener('resize', checkTableScroll);
         window.addEventListener('load', checkTableScroll);
+
+        // Check if database is ready
+        function isDatabaseReady() {
+            return window.databaseManager && window.databaseManager.isInitialized;
+        }
 
         // Test image persistence
         async function testImagePersistence() {

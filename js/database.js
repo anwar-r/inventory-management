@@ -21,6 +21,9 @@ class DatabaseManager {
             // Create or load database
             await this.createDatabase();
             
+            // Migrate database schema if needed
+            await this.migrateDatabaseSchema();
+            
             // Migrate any existing image data if needed
             await this.migrateImageData();
             
@@ -799,6 +802,97 @@ class DatabaseManager {
         }
     }
 
+    // Migrate database schema to new structure
+    async migrateDatabaseSchema() {
+        try {
+            console.log('Checking database schema...');
+            
+            // Check if old table structure exists
+            let needsMigration = false;
+            
+            try {
+                // Check for old column names
+                const oldColumnsResult = this.db.exec("PRAGMA table_info(products)");
+                if (oldColumnsResult.length > 0) {
+                    const columns = oldColumnsResult[0].values;
+                    const columnNames = columns.map(col => col[1]); // Column names are in index 1
+                    
+                    console.log('Current table columns:', columnNames);
+                    
+                    // Check if old columns exist
+                    if (columnNames.includes('name') || columnNames.includes('category') || 
+                        columnNames.includes('gst') || columnNames.includes('master') || 
+                        columnNames.includes('inner') || columnNames.includes('mrp') || 
+                        columnNames.includes('dp')) {
+                        needsMigration = true;
+                        console.log('Old schema detected, migration needed');
+                    }
+                }
+            } catch (e) {
+                console.log('Error checking table structure:', e);
+            }
+            
+            if (needsMigration) {
+                console.log('Starting database schema migration...');
+                
+                // Create new table with correct structure
+                const createNewTable = `
+                    CREATE TABLE products_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        product_name TEXT NOT NULL,
+                        company_name TEXT NOT NULL,
+                        product_quality TEXT NOT NULL,
+                        quantity_bundle INTEGER NOT NULL,
+                        purchase_price REAL NOT NULL,
+                        wholesale_price REAL NOT NULL,
+                        retail_price REAL NOT NULL,
+                        image_id TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                `;
+                
+                this.db.run(createNewTable);
+                
+                // Copy data from old table to new table (if possible)
+                try {
+                    this.db.run(`
+                        INSERT INTO products_new (id, product_name, company_name, product_quality, quantity_bundle, purchase_price, wholesale_price, retail_price, image_id, created_at, updated_at)
+                        SELECT 
+                            id,
+                            COALESCE(name, 'Unknown Product') as product_name,
+                            COALESCE(company, 'Unknown Company') as company_name,
+                            COALESCE(quality, 'Standard') as product_quality,
+                            COALESCE(quantity, 1) as quantity_bundle,
+                            COALESCE(purchase_price, 0) as purchase_price,
+                            COALESCE(wholesale_price, 0) as wholesale_price,
+                            COALESCE(retail_price, 0) as retail_price,
+                            image_id,
+                            COALESCE(created_at, CURRENT_TIMESTAMP) as created_at,
+                            CURRENT_TIMESTAMP as updated_at
+                        FROM products
+                    `);
+                    console.log('Data migrated to new schema');
+                } catch (migrateError) {
+                    console.log('Could not migrate data, creating fresh table');
+                }
+                
+                // Drop old table and rename new table
+                this.db.run('DROP TABLE products');
+                this.db.run('ALTER TABLE products_new RENAME TO products');
+                
+                console.log('Database schema migration completed');
+                
+                // Save the migrated database
+                await this.saveDatabase();
+            } else {
+                console.log('Database schema is up to date');
+            }
+        } catch (error) {
+            console.error('Error migrating database schema:', error);
+        }
+    }
+
 
 
 
@@ -806,3 +900,13 @@ class DatabaseManager {
 
 // Create global instance
 window.databaseManager = new DatabaseManager();
+
+// Initialize database manager immediately
+(async function() {
+    try {
+        await window.databaseManager.init();
+        console.log('Database manager initialized globally');
+    } catch (error) {
+        console.error('Failed to initialize database manager globally:', error);
+    }
+})();
