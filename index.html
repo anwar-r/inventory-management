@@ -559,9 +559,7 @@
             <button class="add-btn" onclick="importDatabase()" style="margin-left: 1rem;">
                 📤 Import Database
             </button>
-            <button class="add-btn" onclick="optimizeDatabase()" style="margin-left: 1rem;">
-                🔧 Optimize DB
-            </button>
+
             <button class="add-btn" onclick="forceRefreshDatabase()" style="margin-left: 1rem;">
                 🔄 Refresh DB
             </button>
@@ -1020,13 +1018,21 @@
 
 
         // Force refresh database and clear cache
-        function forceRefreshDatabase() {
+        async function forceRefreshDatabase() {
             try {
-                // Clear localStorage to force fresh database
-                localStorage.removeItem('inventory-database');
+                // Clear IndexedDB to force fresh database
+                const request = indexedDB.deleteDatabase('inventory-database');
                 
-                // Reload the page
-                location.reload();
+                request.onsuccess = () => {
+                    console.log('IndexedDB cleared successfully');
+                    // Reload the page
+                    location.reload();
+                };
+                
+                request.onerror = () => {
+                    console.error('Error clearing IndexedDB:', request.error);
+                    alert('Error clearing database. Please refresh the page manually.');
+                };
             } catch (error) {
                 console.error('Error refreshing database:', error);
                 alert('Error refreshing database. Please refresh the page manually.');
@@ -1255,14 +1261,24 @@
             let hasImage = false;
             
             if (product.image_id) {
-                const imageData = databaseManager.getImageByImageId(product.image_id);
-                if (imageData && imageData.base64_data) {
-                    imageSrc = imageData.base64_data;
-                    hasImage = true;
+                try {
+                    const imageData = databaseManager.getImageByImageId(product.image_id);
+                    console.log('Image data for edit:', imageData);
+                    if (imageData && imageData.base64_data) {
+                        imageSrc = imageData.base64_data;
+                        hasImage = true;
+                        console.log('Image loaded successfully for edit');
+                    } else {
+                        console.warn('No image data found for image_id:', product.image_id);
+                    }
+                } catch (error) {
+                    console.error('Error loading image for edit:', error);
                 }
+            } else {
+                console.log('No image_id found for product:', product.id);
             }
             
-            document.getElementById('imagePreview').innerHTML = `<img src="${imageSrc}" class="preview-img" alt="Current Image">`;
+            document.getElementById('imagePreview').innerHTML = `<img src="${imageSrc}" class="preview-img" alt="Current Image" onload="console.log('Image loaded in preview')" onerror="console.error('Failed to load image in preview')">`;
             
             // Show/hide delete image button
             if (hasImage) {
@@ -1652,10 +1668,10 @@
                 
                 // Verify image data for all products
                 products.forEach(product => {
-                    if (product.image_path && product.image_path.startsWith('sale-data/')) {
-                        const imageData = databaseManager.getImageData(product.id);
+                    if (product.image_id) {
+                        const imageData = databaseManager.getImageByImageId(product.image_id);
                         if (!imageData || !imageData.base64_data) {
-                            console.warn(`Missing image data for product ${product.id}: ${product.name}`);
+                            console.warn(`Missing image data for product ${product.id}: ${product.product_name}`);
                         }
                     }
                 });
@@ -1712,6 +1728,53 @@
 
         window.addEventListener('resize', checkTableScroll);
         window.addEventListener('load', checkTableScroll);
+
+        // Test image persistence
+        async function testImagePersistence() {
+            try {
+                console.log('Testing image persistence...');
+                
+                // Get all products with images
+                const productsWithImages = products.filter(p => p.image_id);
+                console.log('Products with images:', productsWithImages.length);
+                
+                productsWithImages.forEach(product => {
+                    console.log(`Product ${product.id} (${product.product_name}):`);
+                    console.log('  - image_id:', product.image_id);
+                    
+                    const imageData = databaseManager.getImageByImageId(product.image_id);
+                    if (imageData) {
+                        console.log('  - Image found:', {
+                            fileName: imageData.file_name,
+                            hasBase64: !!imageData.base64_data,
+                            base64Length: imageData.base64_data ? imageData.base64_data.length : 0
+                        });
+                    } else {
+                        console.log('  - No image data found!');
+                    }
+                });
+                
+                // Test edit functionality
+                if (productsWithImages.length > 0) {
+                    const testProduct = productsWithImages[0];
+                    console.log('Testing edit for product:', testProduct.product_name);
+                    
+                    // Simulate edit
+                    const editProduct = databaseManager.getProductById(testProduct.id);
+                    console.log('Edit product data:', editProduct);
+                    
+                    if (editProduct.image_id) {
+                        const editImageData = databaseManager.getImageByImageId(editProduct.image_id);
+                        console.log('Edit image data:', editImageData);
+                    }
+                }
+                
+                showSuccess('Image persistence test completed. Check console for details.');
+            } catch (error) {
+                console.error('Error testing image persistence:', error);
+                alert('Error testing image persistence. Check console for details.');
+            }
+        }
     </script>
 </body>
 </html>

@@ -3,6 +3,8 @@ class DatabaseManager {
     constructor() {
         this.db = null;
         this.isInitialized = false;
+        this.dbName = 'inventory-database';
+        this.dbVersion = 1;
     }
 
     // Initialize database
@@ -12,6 +14,9 @@ class DatabaseManager {
             if (typeof SQL === 'undefined') {
                 await this.loadSQLJS();
             }
+
+            // Initialize IndexedDB
+            await this.initIndexedDB();
 
             // Create or load database
             await this.createDatabase();
@@ -25,6 +30,26 @@ class DatabaseManager {
             console.error('Database initialization failed:', error);
             throw error;
         }
+    }
+
+    // Initialize IndexedDB
+    async initIndexedDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+            
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                this.indexedDB = request.result;
+                resolve();
+            };
+            
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('sqlite-data')) {
+                    db.createObjectStore('sqlite-data', { keyPath: 'id' });
+                }
+            };
+        });
     }
 
     // Load SQL.js library
@@ -49,14 +74,18 @@ class DatabaseManager {
     // Create database and tables
     async createDatabase() {
         try {
-            // Try to load existing database from localStorage
-            const existingDB = localStorage.getItem('inventory-database');
+            // Try to load existing database from IndexedDB
+            let existingDB = await this.loadFromIndexedDB();
+            
+            // If no data in IndexedDB, try to migrate from localStorage
+            if (!existingDB) {
+                existingDB = await this.migrateFromLocalStorage();
+            }
             
             if (existingDB) {
                 // Load existing database
-                const uint8Array = new Uint8Array(existingDB.split(',').map(Number));
-                this.db = new SQL.Database(uint8Array);
-                console.log('Existing database loaded');
+                this.db = new SQL.Database(existingDB);
+                console.log('Existing database loaded from IndexedDB');
                 
                 // Verify image data after loading
                 this.verifyImageData();
@@ -65,12 +94,40 @@ class DatabaseManager {
                 this.db = new SQL.Database();
                 await this.createTables();
                 console.log('New database created');
+                
+                // Save the new database to IndexedDB
+                await this.saveToIndexedDB();
             }
         } catch (error) {
             console.error('Error creating database:', error);
             // Create new database if loading fails
             this.db = new SQL.Database();
             await this.createTables();
+            await this.saveToIndexedDB();
+        }
+    }
+
+    // Migrate data from localStorage to IndexedDB
+    async migrateFromLocalStorage() {
+        try {
+            const existingDB = localStorage.getItem('inventory-database');
+            if (existingDB) {
+                console.log('Migrating database from localStorage to IndexedDB...');
+                const uint8Array = new Uint8Array(existingDB.split(',').map(Number));
+                
+                // Save to IndexedDB
+                await this.saveToIndexedDB();
+                
+                // Clear localStorage
+                localStorage.removeItem('inventory-database');
+                console.log('Migration completed successfully');
+                
+                return uint8Array;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error migrating from localStorage:', error);
+            return null;
         }
     }
 
@@ -141,19 +198,56 @@ class DatabaseManager {
         }
     }
 
-    // Save database to localStorage
-    saveDatabase() {
+    // Save database to IndexedDB
+    async saveToIndexedDB() {
         try {
-            const data = this.db.export();
-            const array = Array.from(data);
-            localStorage.setItem('inventory-database', array.toString());
-            console.log('Database saved to localStorage');
-            
-            // Verify image data is preserved
-            this.verifyImageData();
+            if (this.db) {
+                const data = this.db.export();
+                const transaction = this.indexedDB.transaction(['sqlite-data'], 'readwrite');
+                const store = transaction.objectStore('sqlite-data');
+                
+                await new Promise((resolve, reject) => {
+                    const request = store.put({ id: 'database', data: data });
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+                
+                console.log('Database saved to IndexedDB');
+                
+                // Verify image data is preserved
+                this.verifyImageData();
+            }
         } catch (error) {
-            console.error('Error saving database:', error);
+            console.error('Error saving database to IndexedDB:', error);
         }
+    }
+
+    // Load database from IndexedDB
+    async loadFromIndexedDB() {
+        try {
+            const transaction = this.indexedDB.transaction(['sqlite-data'], 'readonly');
+            const store = transaction.objectStore('sqlite-data');
+            
+            return new Promise((resolve, reject) => {
+                const request = store.get('database');
+                request.onsuccess = () => {
+                    if (request.result) {
+                        resolve(request.result.data);
+                    } else {
+                        resolve(null);
+                    }
+                };
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error('Error loading database from IndexedDB:', error);
+            return null;
+        }
+    }
+
+    // Save database (alias for backward compatibility)
+    async saveDatabase() {
+        return this.saveToIndexedDB();
     }
 
     // Export database as file
@@ -198,7 +292,7 @@ class DatabaseManager {
             // Verify image data after import
             this.verifyImageData();
             
-            this.saveDatabase();
+            await this.saveDatabase();
             
             console.log('Database imported successfully with image data');
             return true;
@@ -258,7 +352,7 @@ class DatabaseManager {
                 }
             }
             
-            this.saveDatabase();
+            await this.saveDatabase();
             
             return { ...product, id: productId };
         } catch (error) {
@@ -320,7 +414,7 @@ class DatabaseManager {
                 }
             }
             
-            this.saveDatabase();
+            await this.saveDatabase();
             
             return this.getProductById(id);
         } catch (error) {
@@ -345,7 +439,7 @@ class DatabaseManager {
             const deletedProduct = this.db.run('DELETE FROM products WHERE id = ?', [id]);
             console.log(`Deleted product ${id}`);
             
-            this.saveDatabase();
+            await this.saveDatabase();
             
             return true;
         } catch (error) {
@@ -462,7 +556,7 @@ class DatabaseManager {
             // Update product image_id
             this.db.run('UPDATE products SET image_id = ? WHERE id = ?', [imageId, productId]);
             
-            this.saveDatabase();
+            await this.saveDatabase();
             
             console.log(`Image saved for product ${productId}: ${fileName} (Base64 length: ${base64.length})`);
             return imageId;
@@ -502,7 +596,10 @@ class DatabaseManager {
 
     getImageByImageId(imageId) {
         try {
+            console.log('Getting image by image_id:', imageId);
             const result = this.db.exec('SELECT * FROM images WHERE image_id = ?', [imageId]);
+            console.log('Image query result:', result);
+            
             if (result.length > 0 && result[0].values.length > 0) {
                 const row = result[0].values[0];
                 const columns = result[0].columns;
@@ -512,8 +609,16 @@ class DatabaseManager {
                     imageData[col] = row[index];
                 });
                 
+                console.log('Image data found:', {
+                    imageId: imageData.image_id,
+                    hasBase64: !!imageData.base64_data,
+                    base64Length: imageData.base64_data ? imageData.base64_data.length : 0,
+                    fileName: imageData.file_name
+                });
+                
                 return imageData;
             }
+            console.log('No image found for image_id:', imageId);
             return null;
         } catch (error) {
             console.error('Error getting image by image_id:', error);
@@ -530,7 +635,7 @@ class DatabaseManager {
             
             const deletedImages = this.db.run('DELETE FROM images WHERE product_id = ?', [productId]);
             this.db.run('UPDATE products SET image_id = NULL WHERE id = ?', [productId]);
-            this.saveDatabase();
+            await this.saveDatabase();
             
             console.log(`Deleted ${deletedImages.changes} image records for product ${productId}`);
             return true;
@@ -694,48 +799,9 @@ class DatabaseManager {
         }
     }
 
-    // Clear all data
-    clearAllData() {
-        try {
-            this.db.run('DELETE FROM images');
-            this.db.run('DELETE FROM dynamic_fields');
-            this.db.run('DELETE FROM products');
-            this.db.run('DELETE FROM categories');
-            this.saveDatabase();
-            console.log('All data cleared');
-            return true;
-        } catch (error) {
-            console.error('Error clearing data:', error);
-            return false;
-        }
-    }
 
-    // Optimize database and clean up orphaned image data
-    optimizeDatabase() {
-        try {
-            // Remove orphaned image data (images without corresponding products)
-            const orphanedResult = this.db.exec(`
-                DELETE FROM images 
-                WHERE product_id NOT IN (SELECT id FROM products)
-            `);
-            
-            // Clean up products with invalid image paths
-            const invalidImageResult = this.db.exec(`
-                UPDATE products 
-                SET image_path = NULL 
-                WHERE image_path IS NOT NULL 
-                AND image_path NOT LIKE 'sale-data/%'
-                AND image_path NOT LIKE 'data:image/%'
-            `);
-            
-            console.log('Database optimized - orphaned image data cleaned up');
-            this.saveDatabase();
-            return true;
-        } catch (error) {
-            console.error('Error optimizing database:', error);
-            return false;
-        }
-    }
+
+
 }
 
 // Create global instance
