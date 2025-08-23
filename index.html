@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#dc2626">
-    <title>SR & SONS - Kitchen Catalog</title>
+    <title>SR & SONS</title>
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
@@ -562,9 +562,10 @@
             <button class="add-btn" onclick="optimizeDatabase()" style="margin-left: 1rem;">
                 🔧 Optimize DB
             </button>
-            <button class="add-btn" onclick="testImagePersistence()" style="margin-left: 1rem;">
-                🧪 Test Images
+            <button class="add-btn" onclick="forceRefreshDatabase()" style="margin-left: 1rem;">
+                🔄 Refresh DB
             </button>
+
         </div>
     </div>
 
@@ -1017,55 +1018,18 @@
             }
         }
 
-        // Test image persistence
-        function testImagePersistence() {
-            try {
-                console.log('Testing image persistence...');
-                
-                // Get all products with images
-                const productsWithImages = products.filter(p => p.image_id);
-                console.log(`Found ${productsWithImages.length} products with images`);
-                
-                productsWithImages.forEach(product => {
-                    const imageData = databaseManager.getImageByImageId(product.image_id);
-                    if (imageData && imageData.base64_data) {
-                        console.log(`✓ Product ${product.id} (${product.product_name}) has valid image data`);
-                    } else {
-                        console.warn(`✗ Product ${product.id} (${product.product_name}) missing image data`);
-                    }
-                });
-                
-                showSuccess('Image persistence test completed. Check console for details.');
-            } catch (error) {
-                console.error('Error testing image persistence:', error);
-                alert('Error testing image persistence. Check console for details.');
-            }
-        }
 
-        // Debug function to test dynamic fields
-        function testDynamicFields() {
+        // Force refresh database and clear cache
+        function forceRefreshDatabase() {
             try {
-                console.log('Testing dynamic fields...');
-                const fields = getDynamicFieldsData();
-                console.log('Dynamic fields data:', fields);
+                // Clear localStorage to force fresh database
+                localStorage.removeItem('inventory-database');
                 
-                // Test database operations
-                const testProduct = {
-                    product_name: 'Test Product',
-                    company_name: 'Test Company',
-                    product_quality: 'Test Quality',
-                    quantity_bundle: 1,
-                    purchase_price: 100,
-                    wholesale_price: 120,
-                    retail_price: 150,
-                    dynamicFields: fields
-                };
-                
-                console.log('Test product data:', testProduct);
-                showSuccess('Dynamic fields test completed. Check console for details.');
+                // Reload the page
+                location.reload();
             } catch (error) {
-                console.error('Error testing dynamic fields:', error);
-                alert('Error testing dynamic fields. Check console for details.');
+                console.error('Error refreshing database:', error);
+                alert('Error refreshing database. Please refresh the page manually.');
             }
         }
 
@@ -1352,7 +1316,7 @@
 
         async function addProductToList() {
             try {
-                // Validate required fields
+                // Validate required fields with specific error messages
                 const productName = document.getElementById('productName').value.trim();
                 const companyName = document.getElementById('companyName').value.trim();
                 const productQuality = document.getElementById('productQuality').value.trim();
@@ -1361,8 +1325,40 @@
                 const wholesalePrice = document.getElementById('wholesalePrice').value;
                 const retailPrice = document.getElementById('retailPrice').value;
 
-                if (!productName || !companyName || !productQuality || !quantityBundle || !purchasePrice || !wholesalePrice || !retailPrice) {
-                    alert('Please fill in all required fields.');
+                // Check each field individually
+                if (!productName) {
+                    alert('Product Name is required.');
+                    document.getElementById('productName').focus();
+                    return;
+                }
+                if (!companyName) {
+                    alert('Company Name is required.');
+                    document.getElementById('companyName').focus();
+                    return;
+                }
+                if (!productQuality) {
+                    alert('Product Quality is required.');
+                    document.getElementById('productQuality').focus();
+                    return;
+                }
+                if (!quantityBundle || isNaN(quantityBundle) || parseInt(quantityBundle) <= 0) {
+                    alert('Quantity Bundle must be a positive number.');
+                    document.getElementById('quantityBundle').focus();
+                    return;
+                }
+                if (!purchasePrice || isNaN(purchasePrice) || parseFloat(purchasePrice) < 0) {
+                    alert('Purchase Price must be a valid number.');
+                    document.getElementById('purchasePrice').focus();
+                    return;
+                }
+                if (!wholesalePrice || isNaN(wholesalePrice) || parseFloat(wholesalePrice) < 0) {
+                    alert('Wholesale Price must be a valid number.');
+                    document.getElementById('wholesalePrice').focus();
+                    return;
+                }
+                if (!retailPrice || isNaN(retailPrice) || parseFloat(retailPrice) < 0) {
+                    alert('Retail Price must be a valid number.');
+                    document.getElementById('retailPrice').focus();
                     return;
                 }
 
@@ -1373,10 +1369,10 @@
                     product_name: productName,
                     company_name: companyName,
                     product_quality: productQuality,
-                    quantity_bundle: parseInt(quantityBundle) || 0,
-                    purchase_price: parseFloat(purchasePrice) || 0,
-                    wholesale_price: parseFloat(wholesalePrice) || 0,
-                    retail_price: parseFloat(retailPrice) || 0,
+                    quantity_bundle: parseInt(quantityBundle),
+                    purchase_price: parseFloat(purchasePrice),
+                    wholesale_price: parseFloat(wholesalePrice),
+                    retail_price: parseFloat(retailPrice),
                     dynamicFields: getDynamicFieldsData()
                 };
 
@@ -1400,13 +1396,13 @@
                 closeAddModal();
             } catch (error) {
                 console.error('Error adding product:', error);
-                alert('Failed to add product. Please check your input and try again.');
+                alert(`Failed to add product: ${error.message || 'Please check your input and try again.'}`);
             }
         }
 
         async function updateProductInList() {
             try {
-                // Validate required fields
+                // Validate required fields with specific error messages
                 const productName = document.getElementById('productName').value.trim();
                 const companyName = document.getElementById('companyName').value.trim();
                 const productQuality = document.getElementById('productQuality').value.trim();
@@ -1415,22 +1411,58 @@
                 const wholesalePrice = document.getElementById('wholesalePrice').value;
                 const retailPrice = document.getElementById('retailPrice').value;
 
-                if (!productName || !companyName || !productQuality || !quantityBundle || !purchasePrice || !wholesalePrice || !retailPrice) {
-                    alert('Please fill in all required fields.');
+                // Check each field individually
+                if (!productName) {
+                    alert('Product Name is required.');
+                    document.getElementById('productName').focus();
+                    return;
+                }
+                if (!companyName) {
+                    alert('Company Name is required.');
+                    document.getElementById('companyName').focus();
+                    return;
+                }
+                if (!productQuality) {
+                    alert('Product Quality is required.');
+                    document.getElementById('productQuality').focus();
+                    return;
+                }
+                if (!quantityBundle || isNaN(quantityBundle) || parseInt(quantityBundle) <= 0) {
+                    alert('Quantity Bundle must be a positive number.');
+                    document.getElementById('quantityBundle').focus();
+                    return;
+                }
+                if (!purchasePrice || isNaN(purchasePrice) || parseFloat(purchasePrice) < 0) {
+                    alert('Purchase Price must be a valid number.');
+                    document.getElementById('purchasePrice').focus();
+                    return;
+                }
+                if (!wholesalePrice || isNaN(wholesalePrice) || parseFloat(wholesalePrice) < 0) {
+                    alert('Wholesale Price must be a valid number.');
+                    document.getElementById('wholesalePrice').focus();
+                    return;
+                }
+                if (!retailPrice || isNaN(retailPrice) || parseFloat(retailPrice) < 0) {
+                    alert('Retail Price must be a valid number.');
+                    document.getElementById('retailPrice').focus();
                     return;
                 }
 
                 const fileInput = document.getElementById('productImage');
                 const imageFile = fileInput.files[0];
                 
+                // Get existing product to preserve image_id
+                const existingProduct = databaseManager.getProductById(editingProductId);
+                
                 const updatedProduct = {
                     product_name: productName,
                     company_name: companyName,
                     product_quality: productQuality,
-                    quantity_bundle: parseInt(quantityBundle) || 0,
-                    purchase_price: parseFloat(purchasePrice) || 0,
-                    wholesale_price: parseFloat(wholesalePrice) || 0,
-                    retail_price: parseFloat(retailPrice) || 0,
+                    quantity_bundle: parseInt(quantityBundle),
+                    purchase_price: parseFloat(purchasePrice),
+                    wholesale_price: parseFloat(wholesalePrice),
+                    retail_price: parseFloat(retailPrice),
+                    image_id: existingProduct.image_id, // Preserve existing image_id
                     dynamicFields: getDynamicFieldsData()
                 };
 
@@ -1453,7 +1485,7 @@
                 closeAddModal();
             } catch (error) {
                 console.error('Error updating product:', error);
-                alert('Failed to update product. Please check your input and try again.');
+                alert(`Failed to update product: ${error.message || 'Please check your input and try again.'}`);
             }
         }
 

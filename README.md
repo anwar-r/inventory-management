@@ -17,7 +17,6 @@ A Progressive Web App (PWA) for inventory management of kitchen products. This a
 ```
 inventory-management/
 ├── index.html              # Main application file
-├── test.html               # Testing and debugging page
 ├── manifest.json           # PWA manifest configuration
 ├── sw.js                   # Service worker for offline functionality
 ├── js/
@@ -168,8 +167,7 @@ This project is open source and available under the MIT License.
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+4. Submit a pull request
 
 ## 📞 Support
 

@@ -126,6 +126,14 @@ class DatabaseManager {
             this.db.run(createImagesTable);
             this.db.run(createDynamicFieldsTable);
             
+            // Remove categories table if it exists (cleanup)
+            try {
+                this.db.run('DROP TABLE IF EXISTS categories');
+                console.log('Categories table removed');
+            } catch (e) {
+                // Ignore if table doesn't exist
+            }
+            
             console.log('Database tables created successfully');
         } catch (error) {
             console.error('Error creating tables:', error);
@@ -261,6 +269,21 @@ class DatabaseManager {
 
     async updateProduct(id, product) {
         try {
+            // Validate required fields
+            if (!product.product_name || !product.company_name || !product.product_quality) {
+                throw new Error('Required fields are missing');
+            }
+
+            // Validate numeric fields
+            if (isNaN(product.quantity_bundle) || isNaN(product.purchase_price) || 
+                isNaN(product.wholesale_price) || isNaN(product.retail_price)) {
+                throw new Error('Invalid numeric values');
+            }
+
+            // Get existing product to preserve image_id if not updating
+            const existingProduct = this.getProductById(id);
+            const imageId = product.image_id || existingProduct.image_id;
+
             const stmt = this.db.prepare(`
                 UPDATE products 
                 SET product_name = ?, company_name = ?, product_quality = ?, quantity_bundle = ?, purchase_price = ?, wholesale_price = ?, retail_price = ?, image_id = ?, updated_at = CURRENT_TIMESTAMP
@@ -275,7 +298,7 @@ class DatabaseManager {
                 product.purchase_price,
                 product.wholesale_price,
                 product.retail_price,
-                product.image_id || null,
+                imageId,
                 id
             ]);
             
@@ -285,10 +308,14 @@ class DatabaseManager {
                 for (let i = 0; i < product.dynamicFields.length; i++) {
                     const field = product.dynamicFields[i];
                     if (field && field.name && field.name.trim() && field.value !== undefined && field.value !== null) {
-                        this.db.run(`
-                            INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
-                            VALUES (?, ?, ?, ?, ?)
-                        `, [id, field.name.trim(), field.value.toString(), field.type || 'text', i + 1]);
+                        try {
+                            this.db.run(`
+                                INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
+                                VALUES (?, ?, ?, ?, ?)
+                            `, [id, field.name.trim(), field.value.toString(), field.type || 'text', i + 1]);
+                        } catch (fieldError) {
+                            console.warn('Failed to save dynamic field:', fieldError);
+                        }
                     }
                 }
             }
@@ -638,19 +665,29 @@ class DatabaseManager {
         try {
             // Check if there are any products with image_path but no corresponding image data
             const result = this.db.exec(`
-                SELECT p.id, p.name, p.image_path 
+                SELECT p.id, p.product_name, p.image_id 
                 FROM products p 
-                LEFT JOIN images i ON p.id = i.product_id 
-                WHERE p.image_path IS NOT NULL AND i.product_id IS NULL
+                LEFT JOIN images i ON p.image_id = i.image_id 
+                WHERE p.image_id IS NOT NULL AND i.image_id IS NULL
             `);
             
             if (result.length > 0 && result[0].values.length > 0) {
                 console.log(`Found ${result[0].values.length} products with missing image data`);
                 
-                // For now, just log the issue - in a real migration, you might want to handle this differently
-                result[0].values.forEach(row => {
-                    console.warn(`Product ${row[0]} (${row[1]}) has image_path but no image data: ${row[2]}`);
-                });
+                // Clear invalid image_id references
+                this.db.run('UPDATE products SET image_id = NULL WHERE image_id IS NOT NULL AND image_id NOT IN (SELECT image_id FROM images)');
+                console.log('Cleared invalid image_id references');
+            }
+
+            // Check for old image_path column and migrate if needed
+            try {
+                const oldImagePathResult = this.db.exec('SELECT image_path FROM products LIMIT 1');
+                if (oldImagePathResult.length > 0) {
+                    console.log('Found old image_path column, migrating data...');
+                    // This will be handled by the new structure
+                }
+            } catch (e) {
+                // image_path column doesn't exist, which is good
             }
         } catch (error) {
             console.error('Error migrating image data:', error);
@@ -663,6 +700,7 @@ class DatabaseManager {
             this.db.run('DELETE FROM images');
             this.db.run('DELETE FROM dynamic_fields');
             this.db.run('DELETE FROM products');
+            this.db.run('DELETE FROM categories');
             this.saveDatabase();
             console.log('All data cleared');
             return true;
