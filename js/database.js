@@ -15,6 +15,10 @@ class DatabaseManager {
 
             // Create or load database
             await this.createDatabase();
+            
+            // Migrate any existing image data if needed
+            await this.migrateImageData();
+            
             this.isInitialized = true;
             console.log('Database initialized successfully');
         } catch (error) {
@@ -53,6 +57,9 @@ class DatabaseManager {
                 const uint8Array = new Uint8Array(existingDB.split(',').map(Number));
                 this.db = new SQL.Database(uint8Array);
                 console.log('Existing database loaded');
+                
+                // Verify image data after loading
+                this.verifyImageData();
             } else {
                 // Create new database
                 this.db = new SQL.Database();
@@ -72,16 +79,29 @@ class DatabaseManager {
         const createProductsTable = `
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                category TEXT NOT NULL,
-                gst INTEGER NOT NULL,
-                master INTEGER NOT NULL,
-                inner INTEGER NOT NULL,
-                mrp REAL NOT NULL,
-                dp REAL NOT NULL,
-                image_path TEXT,
+                product_name TEXT NOT NULL,
+                company_name TEXT NOT NULL,
+                product_quality TEXT NOT NULL,
+                quantity_bundle INTEGER NOT NULL,
+                purchase_price REAL NOT NULL,
+                wholesale_price REAL NOT NULL,
+                retail_price REAL NOT NULL,
+                image_id TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `;
+
+        const createDynamicFieldsTable = `
+            CREATE TABLE IF NOT EXISTS dynamic_fields (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL,
+                field_name TEXT NOT NULL,
+                field_value TEXT,
+                field_type TEXT NOT NULL,
+                field_order INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
             )
         `;
 
@@ -101,30 +121,11 @@ class DatabaseManager {
             )
         `;
 
-        const createCategoriesTable = `
-            CREATE TABLE IF NOT EXISTS categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `;
-
         try {
             this.db.run(createProductsTable);
             this.db.run(createImagesTable);
-            this.db.run(createCategoriesTable);
+            this.db.run(createDynamicFieldsTable);
             
-            // Insert default categories
-            const defaultCategories = [
-                '10 Chipser & Nicer Dicer',
-                '11 Juicer',
-                '15 Modern Kitchen Need'
-            ];
-
-            for (const category of defaultCategories) {
-                this.db.run('INSERT OR IGNORE INTO categories (name) VALUES (?)', [category]);
-            }
-
             console.log('Database tables created successfully');
         } catch (error) {
             console.error('Error creating tables:', error);
@@ -139,6 +140,9 @@ class DatabaseManager {
             const array = Array.from(data);
             localStorage.setItem('inventory-database', array.toString());
             console.log('Database saved to localStorage');
+            
+            // Verify image data is preserved
+            this.verifyImageData();
         } catch (error) {
             console.error('Error saving database:', error);
         }
@@ -147,6 +151,9 @@ class DatabaseManager {
     // Export database as file
     exportDatabase() {
         try {
+            // Verify image data before export
+            this.verifyImageData();
+            
             const data = this.db.export();
             const blob = new Blob([data], { type: 'application/x-sqlite3' });
             const url = URL.createObjectURL(blob);
@@ -160,7 +167,7 @@ class DatabaseManager {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            console.log('Database exported successfully');
+            console.log('Database exported successfully with image data');
         } catch (error) {
             console.error('Error exporting database:', error);
         }
@@ -179,9 +186,13 @@ class DatabaseManager {
             
             // Load new database
             this.db = new SQL.Database(uint8Array);
+            
+            // Verify image data after import
+            this.verifyImageData();
+            
             this.saveDatabase();
             
-            console.log('Database imported successfully');
+            console.log('Database imported successfully with image data');
             return true;
         } catch (error) {
             console.error('Error importing database:', error);
@@ -193,25 +204,33 @@ class DatabaseManager {
     async addProduct(product) {
         try {
             const stmt = this.db.prepare(`
-                INSERT INTO products (name, category, gst, master, inner, mrp, dp, image_path)
+                INSERT INTO products (product_name, company_name, product_quality, quantity_bundle, purchase_price, wholesale_price, retail_price, image_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `);
             
             stmt.run([
-                product.name,
-                product.category,
-                product.gst,
-                product.master,
-                product.inner,
-                product.mrp,
-                product.dp,
-                product.image_path || null
+                product.product_name,
+                product.company_name,
+                product.product_quality,
+                product.quantity_bundle,
+                product.purchase_price,
+                product.wholesale_price,
+                product.retail_price,
+                product.image_id || null
             ]);
             
             const productId = this.db.exec('SELECT last_insert_rowid()')[0].values[0][0];
             
-            // Add category if it doesn't exist
-            this.db.run('INSERT OR IGNORE INTO categories (name) VALUES (?)', [product.category]);
+            // Save dynamic fields
+            if (product.dynamicFields && product.dynamicFields.length > 0) {
+                for (let i = 0; i < product.dynamicFields.length; i++) {
+                    const field = product.dynamicFields[i];
+                    this.db.run(`
+                        INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
+                        VALUES (?, ?, ?, ?, ?)
+                    `, [productId, field.name, field.value, field.type, i + 1]);
+                }
+            }
             
             this.saveDatabase();
             
@@ -226,24 +245,33 @@ class DatabaseManager {
         try {
             const stmt = this.db.prepare(`
                 UPDATE products 
-                SET name = ?, category = ?, gst = ?, master = ?, inner = ?, mrp = ?, dp = ?, image_path = ?, updated_at = CURRENT_TIMESTAMP
+                SET product_name = ?, company_name = ?, product_quality = ?, quantity_bundle = ?, purchase_price = ?, wholesale_price = ?, retail_price = ?, image_id = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             `);
             
             stmt.run([
-                product.name,
-                product.category,
-                product.gst,
-                product.master,
-                product.inner,
-                product.mrp,
-                product.dp,
-                product.image_path || null,
+                product.product_name,
+                product.company_name,
+                product.product_quality,
+                product.quantity_bundle,
+                product.purchase_price,
+                product.wholesale_price,
+                product.retail_price,
+                product.image_id || null,
                 id
             ]);
             
-            // Add category if it doesn't exist
-            this.db.run('INSERT OR IGNORE INTO categories (name) VALUES (?)', [product.category]);
+            // Update dynamic fields
+            this.db.run('DELETE FROM dynamic_fields WHERE product_id = ?', [id]);
+            if (product.dynamicFields && product.dynamicFields.length > 0) {
+                for (let i = 0; i < product.dynamicFields.length; i++) {
+                    const field = product.dynamicFields[i];
+                    this.db.run(`
+                        INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
+                        VALUES (?, ?, ?, ?, ?)
+                    `, [id, field.name, field.value, field.type, i + 1]);
+                }
+            }
             
             this.saveDatabase();
             
@@ -256,11 +284,19 @@ class DatabaseManager {
 
     async deleteProduct(id) {
         try {
+            // Get image data before deletion for logging
+            const imageData = this.getImageData(id);
+            if (imageData) {
+                console.log(`Deleting image for product ${id}: ${imageData.file_name}`);
+            }
+            
             // Delete associated images first
-            this.db.run('DELETE FROM images WHERE product_id = ?', [id]);
+            const deletedImages = this.db.run('DELETE FROM images WHERE product_id = ?', [id]);
+            console.log(`Deleted ${deletedImages.changes} image records for product ${id}`);
             
             // Delete product
-            this.db.run('DELETE FROM products WHERE id = ?', [id]);
+            const deletedProduct = this.db.run('DELETE FROM products WHERE id = ?', [id]);
+            console.log(`Deleted product ${id}`);
             
             this.saveDatabase();
             
@@ -283,6 +319,9 @@ class DatabaseManager {
                     product[col] = row[index];
                 });
                 
+                // Add dynamic fields
+                product.dynamicFields = this.getDynamicFields(id);
+                
                 return product;
             }
             return null;
@@ -304,6 +343,10 @@ class DatabaseManager {
                     columns.forEach((col, index) => {
                         product[col] = row[index];
                     });
+                    
+                    // Add dynamic fields
+                    product.dynamicFields = this.getDynamicFields(product.id);
+                    
                     return product;
                 });
             }
@@ -319,9 +362,9 @@ class DatabaseManager {
             const searchTerm = `%${query}%`;
             const result = this.db.exec(`
                 SELECT * FROM products 
-                WHERE name LIKE ? OR category LIKE ?
+                WHERE product_name LIKE ? OR company_name LIKE ? OR product_quality LIKE ?
                 ORDER BY created_at DESC
-            `, [searchTerm, searchTerm]);
+            `, [searchTerm, searchTerm, searchTerm]);
             
             if (result.length > 0) {
                 const rows = result[0].values;
@@ -350,6 +393,9 @@ class DatabaseManager {
             const filePath = `sale-data/${fileName}`;
             const base64 = await this.fileToBase64(file);
             
+            // First, delete any existing image for this product
+            this.db.run('DELETE FROM images WHERE product_id = ?', [productId]);
+            
             const stmt = this.db.prepare(`
                 INSERT INTO images (image_id, product_id, file_name, file_path, base64_data, original_name, file_size, mime_type)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -366,12 +412,13 @@ class DatabaseManager {
                 file.type
             ]);
             
-            // Update product image path
-            this.db.run('UPDATE products SET image_path = ? WHERE id = ?', [filePath, productId]);
+            // Update product image_id
+            this.db.run('UPDATE products SET image_id = ? WHERE id = ?', [imageId, productId]);
             
             this.saveDatabase();
             
-            return filePath;
+            console.log(`Image saved for product ${productId}: ${fileName} (Base64 length: ${base64.length})`);
+            return imageId;
         } catch (error) {
             console.error('Error saving image:', error);
             throw error;
@@ -390,8 +437,15 @@ class DatabaseManager {
                     imageData[col] = row[index];
                 });
                 
+                console.log(`Image data retrieved for product ${productId}:`, {
+                    hasBase64: !!imageData.base64_data,
+                    base64Length: imageData.base64_data ? imageData.base64_data.length : 0,
+                    fileName: imageData.file_name
+                });
+                
                 return imageData;
             }
+            console.log(`No image data found for product ${productId}`);
             return null;
         } catch (error) {
             console.error('Error getting image data:', error);
@@ -399,11 +453,39 @@ class DatabaseManager {
         }
     }
 
+    getImageByImageId(imageId) {
+        try {
+            const result = this.db.exec('SELECT * FROM images WHERE image_id = ?', [imageId]);
+            if (result.length > 0 && result[0].values.length > 0) {
+                const row = result[0].values[0];
+                const columns = result[0].columns;
+                
+                const imageData = {};
+                columns.forEach((col, index) => {
+                    imageData[col] = row[index];
+                });
+                
+                return imageData;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error getting image by image_id:', error);
+            return null;
+        }
+    }
+
     deleteImage(productId) {
         try {
-            this.db.run('DELETE FROM images WHERE product_id = ?', [productId]);
-            this.db.run('UPDATE products SET image_path = NULL WHERE id = ?', [productId]);
+            const imageData = this.getImageData(productId);
+            if (imageData) {
+                console.log(`Deleting image for product ${productId}: ${imageData.file_name}`);
+            }
+            
+            const deletedImages = this.db.run('DELETE FROM images WHERE product_id = ?', [productId]);
+            this.db.run('UPDATE products SET image_id = NULL WHERE id = ?', [productId]);
             this.saveDatabase();
+            
+            console.log(`Deleted ${deletedImages.changes} image records for product ${productId}`);
             return true;
         } catch (error) {
             console.error('Error deleting image:', error);
@@ -411,35 +493,54 @@ class DatabaseManager {
         }
     }
 
-    // Category operations
-    getAllCategories() {
+    // Dynamic fields operations
+    getDynamicFields(productId) {
         try {
-            const result = this.db.exec('SELECT name FROM categories ORDER BY name');
+            const result = this.db.exec(`
+                SELECT field_name, field_value, field_type, field_order 
+                FROM dynamic_fields 
+                WHERE product_id = ? 
+                ORDER BY field_order
+            `, [productId]);
+            
             if (result.length > 0) {
-                return result[0].values.map(row => row[0]);
+                const rows = result[0].values;
+                const columns = result[0].columns;
+                
+                return rows.map(row => {
+                    const field = {};
+                    columns.forEach((col, index) => {
+                        field[col] = row[index];
+                    });
+                    return field;
+                });
             }
             return [];
         } catch (error) {
-            console.error('Error getting categories:', error);
+            console.error('Error getting dynamic fields:', error);
             return [];
         }
     }
+
+    // Removed getAllCategories method as we no longer use categories
 
     // Statistics
     getStats() {
         try {
             const productsResult = this.db.exec('SELECT COUNT(*) as count FROM products')[0].values[0][0];
-            const categoriesResult = this.db.exec('SELECT COUNT(*) as count FROM categories')[0].values[0][0];
-            const avgPriceResult = this.db.exec('SELECT AVG(mrp) as avg FROM products')[0].values[0][0];
+            const companiesResult = this.db.exec('SELECT COUNT(DISTINCT company_name) as count FROM products')[0].values[0][0];
+            const avgPriceResult = this.db.exec('SELECT AVG(retail_price) as avg FROM products')[0].values[0][0];
+            const imagesResult = this.db.exec('SELECT COUNT(*) as count FROM images')[0].values[0][0];
             
             return {
                 totalProducts: productsResult,
-                totalCategories: categoriesResult,
-                avgPrice: Math.round(avgPriceResult || 0)
+                totalCategories: companiesResult,
+                avgPrice: Math.round(avgPriceResult || 0),
+                totalImages: imagesResult
             };
         } catch (error) {
             console.error('Error getting stats:', error);
-            return { totalProducts: 0, totalCategories: 0, avgPrice: 0 };
+            return { totalProducts: 0, totalCategories: 0, avgPrice: 0, totalImages: 0 };
         }
     }
 
@@ -450,24 +551,130 @@ class DatabaseManager {
 
     fileToBase64(file) {
         return new Promise((resolve, reject) => {
+            // Create a canvas to compress the image
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = function() {
+                // Set canvas size (max 300x300 for storage efficiency)
+                const maxSize = 300;
+                let { width, height } = img;
+                
+                if (width > height) {
+                    if (width > maxSize) {
+                        height = (height * maxSize) / width;
+                        width = maxSize;
+                    }
+                } else {
+                    if (height > maxSize) {
+                        width = (width * maxSize) / height;
+                        height = maxSize;
+                    }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Draw and compress image
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Convert to base64 with compression (0.8 quality)
+                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                resolve(base64);
+            };
+            
+            img.onerror = reject;
+            
             const reader = new FileReader();
+            reader.onload = function(e) {
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
             reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
         });
+    }
+
+    // Verify image data is properly stored
+    verifyImageData() {
+        try {
+            const result = this.db.exec('SELECT COUNT(*) as count FROM images');
+            const imageCount = result[0].values[0][0];
+            console.log(`Database contains ${imageCount} stored images`);
+            
+            if (imageCount > 0) {
+                const sampleResult = this.db.exec('SELECT product_id, LENGTH(base64_data) as data_length FROM images LIMIT 5');
+                if (sampleResult.length > 0) {
+                    console.log('Sample image data lengths:', sampleResult[0].values);
+                }
+            }
+        } catch (error) {
+            console.error('Error verifying image data:', error);
+        }
+    }
+
+    // Migrate existing image data if needed
+    async migrateImageData() {
+        try {
+            // Check if there are any products with image_path but no corresponding image data
+            const result = this.db.exec(`
+                SELECT p.id, p.name, p.image_path 
+                FROM products p 
+                LEFT JOIN images i ON p.id = i.product_id 
+                WHERE p.image_path IS NOT NULL AND i.product_id IS NULL
+            `);
+            
+            if (result.length > 0 && result[0].values.length > 0) {
+                console.log(`Found ${result[0].values.length} products with missing image data`);
+                
+                // For now, just log the issue - in a real migration, you might want to handle this differently
+                result[0].values.forEach(row => {
+                    console.warn(`Product ${row[0]} (${row[1]}) has image_path but no image data: ${row[2]}`);
+                });
+            }
+        } catch (error) {
+            console.error('Error migrating image data:', error);
+        }
     }
 
     // Clear all data
     clearAllData() {
         try {
             this.db.run('DELETE FROM images');
+            this.db.run('DELETE FROM dynamic_fields');
             this.db.run('DELETE FROM products');
-            this.db.run('DELETE FROM categories');
             this.saveDatabase();
             console.log('All data cleared');
             return true;
         } catch (error) {
             console.error('Error clearing data:', error);
+            return false;
+        }
+    }
+
+    // Optimize database and clean up orphaned image data
+    optimizeDatabase() {
+        try {
+            // Remove orphaned image data (images without corresponding products)
+            const orphanedResult = this.db.exec(`
+                DELETE FROM images 
+                WHERE product_id NOT IN (SELECT id FROM products)
+            `);
+            
+            // Clean up products with invalid image paths
+            const invalidImageResult = this.db.exec(`
+                UPDATE products 
+                SET image_path = NULL 
+                WHERE image_path IS NOT NULL 
+                AND image_path NOT LIKE 'sale-data/%'
+                AND image_path NOT LIKE 'data:image/%'
+            `);
+            
+            console.log('Database optimized - orphaned image data cleaned up');
+            this.saveDatabase();
+            return true;
+        } catch (error) {
+            console.error('Error optimizing database:', error);
             return false;
         }
     }
