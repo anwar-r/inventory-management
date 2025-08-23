@@ -559,10 +559,11 @@
             <button class="add-btn" onclick="importDatabase()" style="margin-left: 1rem;">
                 📤 Import Database
             </button>
-
-            <button class="add-btn" onclick="forceRefreshDatabase()" style="margin-left: 1rem;">
-                🔄 Refresh DB
+            <button class="add-btn" onclick="checkDatabaseSetup()" style="margin-left: 1rem;">
+                🔍 Check DB Setup
             </button>
+
+
 
         </div>
     </div>
@@ -737,11 +738,8 @@
             const rows = currentProducts.map((product, index) => {
                 // Get image source
                 let imageSrc = 'https://via.placeholder.com/150?text=No+Image';
-                if (product.image_id) {
-                    const imageData = databaseManager.getImageByImageId(product.image_id);
-                    if (imageData && imageData.base64_data) {
-                        imageSrc = imageData.base64_data;
-                    }
+                if (product.image_data) {
+                    imageSrc = product.image_data;
                 }
 
                 // Generate dynamic fields display
@@ -760,11 +758,10 @@
                     <tr class="fade-in">
                         <td>${startIndex + index + 1}</td>
                         <td>
-                            <img src="${imageSrc}" alt="${product.product_name}" class="product-image loading" 
-                                 onerror="handleImageError(this, '${product.product_name}')" 
-                                 onload="handleImageLoad(this, '${product.product_name}')" 
-                                 onclick="previewProductImage('${product.image_id}', '${product.product_name}')"
-                                 style="display: none; cursor: pointer;" title="Click to preview">
+                            <img src="${imageSrc}" alt="${product.product_name}" class="product-image" 
+                                 style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; cursor: pointer;" 
+                                 onclick="previewProductImage('${product.image_data}', '${product.product_name}')"
+                                 title="Click to preview">
                         </td>
                         <td>${product.product_name || ''}</td>
                         <td>${product.company_name || ''}</td>
@@ -893,19 +890,19 @@
             }
         }
 
-        function filterProducts() {
+        async function filterProducts() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             if (searchTerm.trim() === '') {
                 filteredProducts = [...products];
             } else {
-                filteredProducts = databaseManager.searchProducts(searchTerm);
+                filteredProducts = await databaseManager.searchProducts(searchTerm);
             }
             currentPage = 1;
             renderProducts();
         }
 
-        function updateStats() {
-            const stats = databaseManager.getStats();
+        async function updateStats() {
+            const stats = await databaseManager.getStats();
             document.getElementById('totalProducts').textContent = stats.totalProducts;
             document.getElementById('totalCategories').textContent = stats.totalCategories;
             document.getElementById('avgPrice').textContent = `₹${stats.avgPrice}`;
@@ -1017,27 +1014,7 @@
         }
 
 
-        // Force refresh database and clear cache
-        async function forceRefreshDatabase() {
-            try {
-                // Clear IndexedDB to force fresh database
-                const request = indexedDB.deleteDatabase('inventory-database');
-                
-                request.onsuccess = () => {
-                    console.log('IndexedDB cleared successfully');
-                    // Reload the page
-                    location.reload();
-                };
-                
-                request.onerror = () => {
-                    console.error('Error clearing IndexedDB:', request.error);
-                    alert('Error clearing database. Please refresh the page manually.');
-                };
-            } catch (error) {
-                console.error('Error refreshing database:', error);
-                alert('Error refreshing database. Please refresh the page manually.');
-            }
-        }
+
 
         // Delete product image
         function deleteProductImage() {
@@ -1231,7 +1208,7 @@
         // Removed updateCategoryOptions function as we no longer use categories
 
         async function editProduct(productId) {
-            const product = databaseManager.getProductById(productId);
+            const product = await databaseManager.getProductById(productId);
             if (!product) {
                 alert('Product not found!');
                 return;
@@ -1260,25 +1237,12 @@
             let imageSrc = 'https://via.placeholder.com/150?text=No+Image';
             let hasImage = false;
             
-            if (product.image_id) {
-                try {
-                    const imageData = databaseManager.getImageByImageId(product.image_id);
-                    console.log('Image data for edit:', imageData);
-                    if (imageData && imageData.base64_data) {
-                        imageSrc = imageData.base64_data;
-                        hasImage = true;
-                        console.log('Image loaded successfully for edit');
-                    } else {
-                        console.warn('No image data found for image_id:', product.image_id);
-                    }
-                } catch (error) {
-                    console.error('Error loading image for edit:', error);
-                }
-            } else {
-                console.log('No image_id found for product:', product.id);
+            if (product.image_data) {
+                imageSrc = product.image_data;
+                hasImage = true;
             }
             
-            document.getElementById('imagePreview').innerHTML = `<img src="${imageSrc}" class="preview-img" alt="Current Image" onload="console.log('Image loaded in preview')" onerror="console.error('Failed to load image in preview')">`;
+            document.getElementById('imagePreview').innerHTML = `<img src="${imageSrc}" class="preview-img" alt="Current Image">`;
             
             // Show/hide delete image button
             if (hasImage) {
@@ -1297,9 +1261,15 @@
             }
 
             try {
+                // Check if database manager is initialized
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
                 showLoading();
                 await databaseManager.deleteProduct(productId);
-                products = databaseManager.getAllProducts();
+                products = await databaseManager.getAllProducts();
                 filteredProducts = [...products];
                 currentPage = 1;
                 renderProducts();
@@ -1332,7 +1302,13 @@
 
         async function addProductToList() {
             try {
-                // Validate required fields with specific error messages
+                // Check if database manager is initialized
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
+                // Get form data
                 const productName = document.getElementById('productName').value.trim();
                 const companyName = document.getElementById('companyName').value.trim();
                 const productQuality = document.getElementById('productQuality').value.trim();
@@ -1341,45 +1317,19 @@
                 const wholesalePrice = document.getElementById('wholesalePrice').value;
                 const retailPrice = document.getElementById('retailPrice').value;
 
-                // Check each field individually
-                if (!productName) {
-                    alert('Product Name is required.');
-                    document.getElementById('productName').focus();
-                    return;
-                }
-                if (!companyName) {
-                    alert('Company Name is required.');
-                    document.getElementById('companyName').focus();
-                    return;
-                }
-                if (!productQuality) {
-                    alert('Product Quality is required.');
-                    document.getElementById('productQuality').focus();
-                    return;
-                }
-                if (!quantityBundle || isNaN(quantityBundle) || parseInt(quantityBundle) <= 0) {
-                    alert('Quantity Bundle must be a positive number.');
-                    document.getElementById('quantityBundle').focus();
-                    return;
-                }
-                if (!purchasePrice || isNaN(purchasePrice) || parseFloat(purchasePrice) < 0) {
-                    alert('Purchase Price must be a valid number.');
-                    document.getElementById('purchasePrice').focus();
-                    return;
-                }
-                if (!wholesalePrice || isNaN(wholesalePrice) || parseFloat(wholesalePrice) < 0) {
-                    alert('Wholesale Price must be a valid number.');
-                    document.getElementById('wholesalePrice').focus();
-                    return;
-                }
-                if (!retailPrice || isNaN(retailPrice) || parseFloat(retailPrice) < 0) {
-                    alert('Retail Price must be a valid number.');
-                    document.getElementById('retailPrice').focus();
+                // Basic validation
+                if (!productName || !companyName || !productQuality || !quantityBundle || !purchasePrice || !wholesalePrice || !retailPrice) {
+                    alert('Please fill in all required fields.');
                     return;
                 }
 
                 const fileInput = document.getElementById('productImage');
                 const imageFile = fileInput.files[0];
+                
+                let imageData = null;
+                if (imageFile) {
+                    imageData = await databaseManager.fileToBase64(imageFile);
+                }
                 
                 const newProduct = {
                     product_name: productName,
@@ -1389,19 +1339,15 @@
                     purchase_price: parseFloat(purchasePrice),
                     wholesale_price: parseFloat(wholesalePrice),
                     retail_price: parseFloat(retailPrice),
+                    image_data: imageData,
                     dynamicFields: getDynamicFieldsData()
                 };
 
                 // Add product to database
-                const addedProduct = await databaseManager.addProduct(newProduct);
-                
-                // Save image if provided
-                if (imageFile) {
-                    await databaseManager.saveImage(imageFile, addedProduct.id);
-                }
+                await databaseManager.addProduct(newProduct);
                 
                 // Refresh products list
-                products = databaseManager.getAllProducts();
+                products = await databaseManager.getAllProducts();
                 filteredProducts = [...products];
                 currentPage = 1;
                 renderProducts();
@@ -1412,13 +1358,19 @@
                 closeAddModal();
             } catch (error) {
                 console.error('Error adding product:', error);
-                alert(`Failed to add product: ${error.message || 'Please check your input and try again.'}`);
+                alert('Failed to add product. Please try again.');
             }
         }
 
         async function updateProductInList() {
             try {
-                // Validate required fields with specific error messages
+                // Check if database manager is initialized
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
+                // Get form data
                 const productName = document.getElementById('productName').value.trim();
                 const companyName = document.getElementById('companyName').value.trim();
                 const productQuality = document.getElementById('productQuality').value.trim();
@@ -1427,48 +1379,22 @@
                 const wholesalePrice = document.getElementById('wholesalePrice').value;
                 const retailPrice = document.getElementById('retailPrice').value;
 
-                // Check each field individually
-                if (!productName) {
-                    alert('Product Name is required.');
-                    document.getElementById('productName').focus();
-                    return;
-                }
-                if (!companyName) {
-                    alert('Company Name is required.');
-                    document.getElementById('companyName').focus();
-                    return;
-                }
-                if (!productQuality) {
-                    alert('Product Quality is required.');
-                    document.getElementById('productQuality').focus();
-                    return;
-                }
-                if (!quantityBundle || isNaN(quantityBundle) || parseInt(quantityBundle) <= 0) {
-                    alert('Quantity Bundle must be a positive number.');
-                    document.getElementById('quantityBundle').focus();
-                    return;
-                }
-                if (!purchasePrice || isNaN(purchasePrice) || parseFloat(purchasePrice) < 0) {
-                    alert('Purchase Price must be a valid number.');
-                    document.getElementById('purchasePrice').focus();
-                    return;
-                }
-                if (!wholesalePrice || isNaN(wholesalePrice) || parseFloat(wholesalePrice) < 0) {
-                    alert('Wholesale Price must be a valid number.');
-                    document.getElementById('wholesalePrice').focus();
-                    return;
-                }
-                if (!retailPrice || isNaN(retailPrice) || parseFloat(retailPrice) < 0) {
-                    alert('Retail Price must be a valid number.');
-                    document.getElementById('retailPrice').focus();
+                // Basic validation
+                if (!productName || !companyName || !productQuality || !quantityBundle || !purchasePrice || !wholesalePrice || !retailPrice) {
+                    alert('Please fill in all required fields.');
                     return;
                 }
 
                 const fileInput = document.getElementById('productImage');
                 const imageFile = fileInput.files[0];
                 
-                // Get existing product to preserve image_id
+                // Get existing product to preserve image
                 const existingProduct = databaseManager.getProductById(editingProductId);
+                
+                let imageData = existingProduct.image_data;
+                if (imageFile) {
+                    imageData = await databaseManager.fileToBase64(imageFile);
+                }
                 
                 const updatedProduct = {
                     product_name: productName,
@@ -1478,20 +1404,15 @@
                     purchase_price: parseFloat(purchasePrice),
                     wholesale_price: parseFloat(wholesalePrice),
                     retail_price: parseFloat(retailPrice),
-                    image_id: existingProduct.image_id, // Preserve existing image_id
+                    image_data: imageData,
                     dynamicFields: getDynamicFieldsData()
                 };
 
                 // Update product in database
                 await databaseManager.updateProduct(editingProductId, updatedProduct);
                 
-                // Save new image if provided
-                if (imageFile) {
-                    await databaseManager.saveImage(imageFile, editingProductId);
-                }
-                
                 // Refresh products list
-                products = databaseManager.getAllProducts();
+                products = await databaseManager.getAllProducts();
                 filteredProducts = [...products];
                 renderProducts();
                 updateStats();
@@ -1501,7 +1422,7 @@
                 closeAddModal();
             } catch (error) {
                 console.error('Error updating product:', error);
-                alert(`Failed to update product: ${error.message || 'Please check your input and try again.'}`);
+                alert('Failed to update product. Please try again.');
             }
         }
 
@@ -1657,11 +1578,20 @@
         // Initialize app
         document.addEventListener('DOMContentLoaded', async function() {
             try {
-                // Initialize database
-                await databaseManager.init();
+                // Wait for database manager to be initialized
+                let attempts = 0;
+                while (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                    if (attempts > 50) { // 5 seconds timeout
+                        throw new Error('Database initialization timeout');
+                    }
+                }
+                
+                console.log('Database manager is ready, loading data...');
                 
                 // Load data from database
-                products = databaseManager.getAllProducts();
+                products = await databaseManager.getAllProducts();
                 filteredProducts = [...products];
                 
                 console.log('App initialized with', products.length, 'products');
@@ -1728,6 +1658,27 @@
 
         window.addEventListener('resize', checkTableScroll);
         window.addEventListener('load', checkTableScroll);
+
+        // Check if database is ready
+        function isDatabaseReady() {
+            return window.databaseManager && window.databaseManager.isInitialized;
+        }
+
+        // Check database setup
+        async function checkDatabaseSetup() {
+            try {
+                if (!window.databaseManager || !window.databaseManager.isInitialized) {
+                    alert('Database is not ready. Please wait a moment and try again.');
+                    return;
+                }
+
+                await window.databaseManager.checkDatabaseSetup();
+                alert('✅ Database setup is correct!');
+            } catch (error) {
+                console.error('Database setup check failed:', error);
+                alert('❌ Database setup issue: ' + error.message);
+            }
+        }
 
         // Test image persistence
         async function testImagePersistence() {
