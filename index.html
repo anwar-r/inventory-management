@@ -927,14 +927,18 @@
             document.getElementById('successMessage').style.display = 'none';
             
             // Clear dynamic fields
-            document.getElementById('dynamicFieldsContainer').innerHTML = '';
-            dynamicFieldCounter = 0;
+            clearDynamicFields();
             
             // Reset edit mode
             editingProductId = null;
             document.getElementById('modalTitle').textContent = 'Add New Product';
             document.getElementById('submitBtn').textContent = 'Add Product';
             document.getElementById('addModal').classList.remove('edit-mode');
+        }
+
+        function clearDynamicFields() {
+            document.getElementById('dynamicFieldsContainer').innerHTML = '';
+            dynamicFieldCounter = 0;
         }
 
         // Export database
@@ -1019,15 +1023,15 @@
                 console.log('Testing image persistence...');
                 
                 // Get all products with images
-                const productsWithImages = products.filter(p => p.image_path);
+                const productsWithImages = products.filter(p => p.image_id);
                 console.log(`Found ${productsWithImages.length} products with images`);
                 
                 productsWithImages.forEach(product => {
-                    const imageData = databaseManager.getImageData(product.id);
+                    const imageData = databaseManager.getImageByImageId(product.image_id);
                     if (imageData && imageData.base64_data) {
-                        console.log(`✓ Product ${product.id} (${product.name}) has valid image data`);
+                        console.log(`✓ Product ${product.id} (${product.product_name}) has valid image data`);
                     } else {
-                        console.warn(`✗ Product ${product.id} (${product.name}) missing image data`);
+                        console.warn(`✗ Product ${product.id} (${product.product_name}) missing image data`);
                     }
                 });
                 
@@ -1035,6 +1039,33 @@
             } catch (error) {
                 console.error('Error testing image persistence:', error);
                 alert('Error testing image persistence. Check console for details.');
+            }
+        }
+
+        // Debug function to test dynamic fields
+        function testDynamicFields() {
+            try {
+                console.log('Testing dynamic fields...');
+                const fields = getDynamicFieldsData();
+                console.log('Dynamic fields data:', fields);
+                
+                // Test database operations
+                const testProduct = {
+                    product_name: 'Test Product',
+                    company_name: 'Test Company',
+                    product_quality: 'Test Quality',
+                    quantity_bundle: 1,
+                    purchase_price: 100,
+                    wholesale_price: 120,
+                    retail_price: 150,
+                    dynamicFields: fields
+                };
+                
+                console.log('Test product data:', testProduct);
+                showSuccess('Dynamic fields test completed. Check console for details.');
+            } catch (error) {
+                console.error('Error testing dynamic fields:', error);
+                alert('Error testing dynamic fields. Check console for details.');
             }
         }
 
@@ -1130,16 +1161,23 @@
             
             fieldElements.forEach(field => {
                 const fieldId = field.id;
-                const name = document.getElementById(`${fieldId}_name`).value.trim();
-                const type = document.getElementById(`${fieldId}_type`).value;
-                const value = document.getElementById(`${fieldId}_value`).value.trim();
+                const nameInput = document.getElementById(`${fieldId}_name`);
+                const typeInput = document.getElementById(`${fieldId}_type`);
+                const valueInput = document.getElementById(`${fieldId}_value`);
                 
-                if (name && value) {
-                    fields.push({
-                        name: name,
-                        type: type,
-                        value: value
-                    });
+                if (nameInput && typeInput && valueInput) {
+                    const name = nameInput.value.trim();
+                    const type = typeInput.value;
+                    const value = valueInput.value.trim();
+                    
+                    // Only add fields that have both name and value
+                    if (name && value) {
+                        fields.push({
+                            name: name,
+                            type: type || 'text',
+                            value: value
+                        });
+                    }
                 }
             });
             
@@ -1313,21 +1351,35 @@
         });
 
         async function addProductToList() {
-            const fileInput = document.getElementById('productImage');
-            const imageFile = fileInput.files[0];
-            
-            const newProduct = {
-                product_name: document.getElementById('productName').value,
-                company_name: document.getElementById('companyName').value,
-                product_quality: document.getElementById('productQuality').value,
-                quantity_bundle: parseInt(document.getElementById('quantityBundle').value),
-                purchase_price: parseFloat(document.getElementById('purchasePrice').value),
-                wholesale_price: parseFloat(document.getElementById('wholesalePrice').value),
-                retail_price: parseFloat(document.getElementById('retailPrice').value),
-                dynamicFields: getDynamicFieldsData()
-            };
-
             try {
+                // Validate required fields
+                const productName = document.getElementById('productName').value.trim();
+                const companyName = document.getElementById('companyName').value.trim();
+                const productQuality = document.getElementById('productQuality').value.trim();
+                const quantityBundle = document.getElementById('quantityBundle').value;
+                const purchasePrice = document.getElementById('purchasePrice').value;
+                const wholesalePrice = document.getElementById('wholesalePrice').value;
+                const retailPrice = document.getElementById('retailPrice').value;
+
+                if (!productName || !companyName || !productQuality || !quantityBundle || !purchasePrice || !wholesalePrice || !retailPrice) {
+                    alert('Please fill in all required fields.');
+                    return;
+                }
+
+                const fileInput = document.getElementById('productImage');
+                const imageFile = fileInput.files[0];
+                
+                const newProduct = {
+                    product_name: productName,
+                    company_name: companyName,
+                    product_quality: productQuality,
+                    quantity_bundle: parseInt(quantityBundle) || 0,
+                    purchase_price: parseFloat(purchasePrice) || 0,
+                    wholesale_price: parseFloat(wholesalePrice) || 0,
+                    retail_price: parseFloat(retailPrice) || 0,
+                    dynamicFields: getDynamicFieldsData()
+                };
+
                 // Add product to database
                 const addedProduct = await databaseManager.addProduct(newProduct);
                 
@@ -1348,26 +1400,40 @@
                 closeAddModal();
             } catch (error) {
                 console.error('Error adding product:', error);
-                alert('Failed to add product. Please try again.');
+                alert('Failed to add product. Please check your input and try again.');
             }
         }
 
         async function updateProductInList() {
-            const fileInput = document.getElementById('productImage');
-            const imageFile = fileInput.files[0];
-            
-            const updatedProduct = {
-                product_name: document.getElementById('productName').value,
-                company_name: document.getElementById('companyName').value,
-                product_quality: document.getElementById('productQuality').value,
-                quantity_bundle: parseInt(document.getElementById('quantityBundle').value),
-                purchase_price: parseFloat(document.getElementById('purchasePrice').value),
-                wholesale_price: parseFloat(document.getElementById('wholesalePrice').value),
-                retail_price: parseFloat(document.getElementById('retailPrice').value),
-                dynamicFields: getDynamicFieldsData()
-            };
-
             try {
+                // Validate required fields
+                const productName = document.getElementById('productName').value.trim();
+                const companyName = document.getElementById('companyName').value.trim();
+                const productQuality = document.getElementById('productQuality').value.trim();
+                const quantityBundle = document.getElementById('quantityBundle').value;
+                const purchasePrice = document.getElementById('purchasePrice').value;
+                const wholesalePrice = document.getElementById('wholesalePrice').value;
+                const retailPrice = document.getElementById('retailPrice').value;
+
+                if (!productName || !companyName || !productQuality || !quantityBundle || !purchasePrice || !wholesalePrice || !retailPrice) {
+                    alert('Please fill in all required fields.');
+                    return;
+                }
+
+                const fileInput = document.getElementById('productImage');
+                const imageFile = fileInput.files[0];
+                
+                const updatedProduct = {
+                    product_name: productName,
+                    company_name: companyName,
+                    product_quality: productQuality,
+                    quantity_bundle: parseInt(quantityBundle) || 0,
+                    purchase_price: parseFloat(purchasePrice) || 0,
+                    wholesale_price: parseFloat(wholesalePrice) || 0,
+                    retail_price: parseFloat(retailPrice) || 0,
+                    dynamicFields: getDynamicFieldsData()
+                };
+
                 // Update product in database
                 await databaseManager.updateProduct(editingProductId, updatedProduct);
                 
@@ -1387,7 +1453,7 @@
                 closeAddModal();
             } catch (error) {
                 console.error('Error updating product:', error);
-                alert('Failed to update product. Please try again.');
+                alert('Failed to update product. Please check your input and try again.');
             }
         }
 

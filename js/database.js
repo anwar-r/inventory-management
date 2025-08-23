@@ -203,6 +203,17 @@ class DatabaseManager {
     // Product operations
     async addProduct(product) {
         try {
+            // Validate required fields
+            if (!product.product_name || !product.company_name || !product.product_quality) {
+                throw new Error('Required fields are missing');
+            }
+
+            // Validate numeric fields
+            if (isNaN(product.quantity_bundle) || isNaN(product.purchase_price) || 
+                isNaN(product.wholesale_price) || isNaN(product.retail_price)) {
+                throw new Error('Invalid numeric values');
+            }
+
             const stmt = this.db.prepare(`
                 INSERT INTO products (product_name, company_name, product_quality, quantity_bundle, purchase_price, wholesale_price, retail_price, image_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -221,14 +232,21 @@ class DatabaseManager {
             
             const productId = this.db.exec('SELECT last_insert_rowid()')[0].values[0][0];
             
-            // Save dynamic fields
-            if (product.dynamicFields && product.dynamicFields.length > 0) {
+            // Save dynamic fields (optional)
+            if (product.dynamicFields && Array.isArray(product.dynamicFields) && product.dynamicFields.length > 0) {
                 for (let i = 0; i < product.dynamicFields.length; i++) {
                     const field = product.dynamicFields[i];
-                    this.db.run(`
-                        INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
-                        VALUES (?, ?, ?, ?, ?)
-                    `, [productId, field.name, field.value, field.type, i + 1]);
+                    if (field && field.name && field.name.trim() && field.value !== undefined && field.value !== null) {
+                        try {
+                            this.db.run(`
+                                INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
+                                VALUES (?, ?, ?, ?, ?)
+                            `, [productId, field.name.trim(), field.value.toString(), field.type || 'text', i + 1]);
+                        } catch (fieldError) {
+                            console.warn('Failed to save dynamic field:', fieldError);
+                            // Continue with other fields
+                        }
+                    }
                 }
             }
             
@@ -261,15 +279,17 @@ class DatabaseManager {
                 id
             ]);
             
-            // Update dynamic fields
+            // Update dynamic fields (optional)
             this.db.run('DELETE FROM dynamic_fields WHERE product_id = ?', [id]);
-            if (product.dynamicFields && product.dynamicFields.length > 0) {
+            if (product.dynamicFields && Array.isArray(product.dynamicFields) && product.dynamicFields.length > 0) {
                 for (let i = 0; i < product.dynamicFields.length; i++) {
                     const field = product.dynamicFields[i];
-                    this.db.run(`
-                        INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
-                        VALUES (?, ?, ?, ?, ?)
-                    `, [id, field.name, field.value, field.type, i + 1]);
+                    if (field && field.name && field.name.trim() && field.value !== undefined && field.value !== null) {
+                        this.db.run(`
+                            INSERT INTO dynamic_fields (product_id, field_name, field_value, field_type, field_order)
+                            VALUES (?, ?, ?, ?, ?)
+                        `, [id, field.name.trim(), field.value.toString(), field.type || 'text', i + 1]);
+                    }
                 }
             }
             
