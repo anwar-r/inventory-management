@@ -559,9 +559,7 @@
             <button class="add-btn" onclick="importDatabase()" style="margin-left: 1rem;">
                 📤 Import Database
             </button>
-            <button class="add-btn" onclick="optimizeDatabase()" style="margin-left: 1rem;">
-                🔧 Optimize DB
-            </button>
+
             <button class="add-btn" onclick="forceRefreshDatabase()" style="margin-left: 1rem;">
                 🔄 Refresh DB
             </button>
@@ -1020,13 +1018,21 @@
 
 
         // Force refresh database and clear cache
-        function forceRefreshDatabase() {
+        async function forceRefreshDatabase() {
             try {
-                // Clear localStorage to force fresh database
-                localStorage.removeItem('inventory-database');
+                // Clear IndexedDB to force fresh database
+                const request = indexedDB.deleteDatabase('inventory-database');
                 
-                // Reload the page
-                location.reload();
+                request.onsuccess = () => {
+                    console.log('IndexedDB cleared successfully');
+                    // Reload the page
+                    location.reload();
+                };
+                
+                request.onerror = () => {
+                    console.error('Error clearing IndexedDB:', request.error);
+                    alert('Error clearing database. Please refresh the page manually.');
+                };
             } catch (error) {
                 console.error('Error refreshing database:', error);
                 alert('Error refreshing database. Please refresh the page manually.');
