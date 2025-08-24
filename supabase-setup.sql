@@ -8,9 +8,9 @@ CREATE TABLE IF NOT EXISTS products (
     company_name TEXT NOT NULL,
     product_quality TEXT NOT NULL,
     quantity_bundle INTEGER NOT NULL,
-    purchase_price DECIMAL(10,2) NOT NULL,
-    wholesale_price DECIMAL(10,2) NOT NULL,
-    retail_price DECIMAL(10,2) NOT NULL,
+    purchase_price TEXT NOT NULL,
+    wholesale_price TEXT NOT NULL,
+    retail_price INTEGER NOT NULL,
     image_data TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

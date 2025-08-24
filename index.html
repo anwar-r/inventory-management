@@ -679,18 +679,18 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Purchase Price (₹)</label>
-                    <input type="text" class="form-input" id="purchasePrice" step="0.01" required>
+                    <label class="form-label">Purchase Price</label>
+                    <input type="text" class="form-input" id="purchasePrice" required>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Wholesale Price (₹)</label>
+                    <label class="form-label">Wholesale Price</label>
                     <input type="text" class="form-input" id="wholesalePrice" required>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Retail Price (₹)</label>
-                    <input type="text" class="form-input" id="retailPrice" required>
+                    <label class="form-label">Retail Price</label>
+                    <input type="number" class="form-input" id="retailPrice" required>
                 </div>
 
                 <div class="form-group">
@@ -781,9 +781,9 @@
                         <td>${product.company_name || ''}</td>
                         <td>${product.product_quality || ''}</td>
                         <td>${product.quantity_bundle || 0}</td>
-                        <td class="price">₹${product.purchase_price || 0}</td>
-                        <td class="price">₹${product.wholesale_price || 0}</td>
-                        <td class="price">₹${product.retail_price || 0}</td>
+                        <td class="price">${product.purchase_price || ''}</td>
+                        <td class="price">${product.wholesale_price || ''}</td>
+                        <td class="price">${product.retail_price || 0}</td>
                         <td style="max-width: 200px; overflow: hidden;">
                             ${dynamicFieldsHtml}
                         </td>
@@ -919,7 +919,7 @@
             const stats = await databaseManager.getStats();
             document.getElementById('totalProducts').textContent = stats.totalProducts;
             document.getElementById('totalCategories').textContent = stats.totalCategories;
-            document.getElementById('avgPrice').textContent = `₹${stats.avgPrice}`;
+            document.getElementById('avgPrice').textContent = `${stats.avgPrice}`;
             document.getElementById('totalImages').textContent = stats.totalImages;
         }
 
@@ -1264,9 +1264,11 @@
             document.getElementById('companyName').value = product.company_name || '';
             document.getElementById('productQuality').value = product.product_quality || '';
             document.getElementById('quantityBundle').value = product.quantity_bundle || '';
-            document.getElementById('purchasePrice').value = product.purchase_price || '';
-            document.getElementById('wholesalePrice').value = product.wholesale_price || '';
+            document.getElementById('purchasePrice').value = String(product.purchase_price || '');
+            document.getElementById('wholesalePrice').value = String(product.wholesale_price || '');
             document.getElementById('retailPrice').value = product.retail_price || '';
+            
+
             
             // Populate dynamic fields
             populateDynamicFields(product.dynamicFields);
@@ -1374,9 +1376,9 @@
                     company_name: companyName,
                     product_quality: productQuality,
                     quantity_bundle: parseInt(quantityBundle),
-                    purchase_price: parseFloat(purchasePrice),
-                    wholesale_price: parseFloat(wholesalePrice),
-                    retail_price: parseFloat(retailPrice),
+                    purchase_price: purchasePrice || '',
+                    wholesale_price: wholesalePrice || '',
+                    retail_price: retailPrice ? parseInt(retailPrice) : 0,
                     image_data: imageData,
                     dynamicFields: getDynamicFieldsData()
                 };
@@ -1427,9 +1429,9 @@
                 const imageFile = fileInput.files[0];
                 
                 // Get existing product to preserve image
-                const existingProduct = databaseManager.getProductById(editingProductId);
+                const existingProduct = await databaseManager.getProductById(editingProductId);
                 
-                let imageData = existingProduct.image_data;
+                let imageData = existingProduct ? existingProduct.image_data : null;
                 if (imageFile) {
                     imageData = await databaseManager.fileToBase64(imageFile);
                 }
@@ -1439,9 +1441,9 @@
                     company_name: companyName,
                     product_quality: productQuality,
                     quantity_bundle: parseInt(quantityBundle),
-                    purchase_price: parseFloat(purchasePrice),
-                    wholesale_price: parseFloat(wholesalePrice),
-                    retail_price: parseFloat(retailPrice),
+                    purchase_price: purchasePrice || '',
+                    wholesale_price: wholesalePrice || '',
+                    retail_price: retailPrice ? parseInt(retailPrice) : 0,
                     image_data: imageData,
                     dynamicFields: getDynamicFieldsData()
                 };

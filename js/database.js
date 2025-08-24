@@ -323,7 +323,11 @@ class DatabaseManager {
             const totalProducts = products.length;
             const companies = [...new Set(products.map(p => p.company_name))].length;
             const avgPrice = products.length > 0 
-                ? Math.round(products.reduce((sum, p) => sum + (p.retail_price || 0), 0) / products.length)
+                ? Math.round(products.reduce((sum, p) => {
+                    // retail_price is now INTEGER, so we can use it directly
+                    const price = p.retail_price || 0;
+                    return sum + price;
+                }, 0) / products.length)
                 : 0;
 
             return {

@@ -58,9 +58,9 @@ this.supabase = supabase.createClient(
 - `company_name`: Company name (required)
 - `product_quality`: Product quality (required)
 - `quantity_bundle`: Quantity (required)
-- `purchase_price`: Purchase price (required)
-- `wholesale_price`: Wholesale price (required)
-- `retail_price`: Retail price (required)
+- `purchase_price`: Purchase price as text (required) - allows non-numeric values like "LA"
+- `wholesale_price`: Wholesale price as text (required) - for flexibility
+- `retail_price`: Retail price as integer (required) - numeric values only
 - `image_data`: Base64 encoded image (optional)
 - `created_at`: Creation timestamp
 - `updated_at`: Last update timestamp
