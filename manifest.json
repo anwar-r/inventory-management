@@ -1,8 +1,8 @@
 {
-  "name": "SR & SONS - Kitchen Catalog",
+  "name": "SR & SONS ",
   "short_name": "SR Catalog",
   "description": "Inventory management system for kitchen products",
-  "start_url": "/",
+  "start_url": "/inventory-management",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#dc2626",
