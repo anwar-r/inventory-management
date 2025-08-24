@@ -298,6 +298,19 @@ class DatabaseManager {
         });
     }
 
+    // Get image by image ID (for preview functionality)
+    getImageByImageId(imageId) {
+        // Since images are stored as base64 data directly in the image_data field,
+        // the imageId is actually the base64 data itself
+        if (!imageId) {
+            return null;
+        }
+        
+        return {
+            base64_data: imageId
+        };
+    }
+
     // Get statistics
     async getStats() {
         try {

@@ -142,7 +142,15 @@
             object-fit: cover;
             border-radius: 8px;
             border: 2px solid #e5e7eb;
-            transition: opacity 0.3s ease;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .product-image:hover {
+            transform: scale(1.05);
+            border-color: #dc2626;
+            box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
         }
 
         .product-image.loading {
@@ -710,13 +718,16 @@
 
     <!-- Image Preview Modal -->
     <div class="modal" id="imagePreviewModal">
-        <div class="modal-content" style="max-width: 80%; max-height: 80%;">
-            <div class="modal-header">
-                <h2 class="modal-title">Image Preview</h2>
-                <button class="close-btn" onclick="closeImagePreview()">&times;</button>
+        <div class="modal-content" style="max-width: 90%; max-height: 90%; background: rgba(0,0,0,0.95);">
+            <div class="modal-header" style="background: transparent; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                <h2 class="modal-title" style="color: white;">Image Preview</h2>
+                <button class="close-btn" onclick="closeImagePreview()" style="color: white; background: rgba(255,255,255,0.1);">&times;</button>
             </div>
-            <div style="text-align: center;">
-                <img id="previewImage" src="" alt="Preview" style="max-width: 100%; max-height: 60vh; object-fit: contain;">
+            <div style="text-align: center; padding: 1rem;">
+                <img id="previewImage" src="" alt="Preview" style="max-width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            </div>
+            <div style="text-align: center; margin-top: 1rem;">
+                <p style="color: white; font-size: 0.9rem; opacity: 0.8;">Click outside the image or press ESC to close</p>
             </div>
         </div>
     </div>
@@ -758,10 +769,13 @@
                     <tr class="fade-in">
                         <td>${startIndex + index + 1}</td>
                         <td>
-                            <img src="${imageSrc}" alt="${product.product_name}" class="product-image" 
-                                 style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; cursor: pointer;" 
-                                 onclick="previewProductImage('${product.image_data}', '${product.product_name}')"
-                                 title="Click to preview">
+                            <div style="position: relative; display: inline-block;">
+                                <img src="${imageSrc}" alt="${product.product_name}" class="product-image" 
+                                     style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; cursor: pointer;" 
+                                     onclick="previewProductImage('${product.image_data}', '${product.product_name}')"
+                                     title="Click to preview">
+                                <div style="position: absolute; top: 2px; right: 2px; background: rgba(220, 38, 38, 0.8); color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; pointer-events: none;">👁️</div>
+                            </div>
                         </td>
                         <td>${product.product_name || ''}</td>
                         <td>${product.company_name || ''}</td>
@@ -1163,6 +1177,13 @@
                 document.getElementById('previewImage').alt = productName;
                 document.getElementById('imagePreviewModal').style.display = 'block';
                 document.body.style.overflow = 'hidden';
+                
+                // Add loading state
+                const previewImage = document.getElementById('previewImage');
+                previewImage.style.opacity = '0.7';
+                previewImage.onload = function() {
+                    previewImage.style.opacity = '1';
+                };
             } else {
                 alert('Image not found.');
             }
@@ -1172,6 +1193,23 @@
             document.getElementById('imagePreviewModal').style.display = 'none';
             document.body.style.overflow = 'auto';
         }
+
+        // Add keyboard support for closing modal
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const imageModal = document.getElementById('imagePreviewModal');
+                if (imageModal.style.display === 'block') {
+                    closeImagePreview();
+                }
+            }
+        });
+
+        // Add click outside to close functionality
+        document.getElementById('imagePreviewModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeImagePreview();
+            }
+        });
 
         function previewImage() {
             const file = document.getElementById('productImage').files[0];
