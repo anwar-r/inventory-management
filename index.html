@@ -1578,42 +1578,9 @@
             }
         });
 
-        // Touch gestures for mobile
-        let startX = 0;
-        let startY = 0;
-
-        document.addEventListener('touchstart', function(e) {
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-        });
-
-        document.addEventListener('touchend', function(e) {
-            if (!startX || !startY) return;
-
-            const endX = e.changedTouches[0].clientX;
-            const endY = e.changedTouches[0].clientY;
-
-            const diffX = startX - endX;
-            const diffY = startY - endY;
-
-            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-                if (diffX > 0) {
-                    // Swipe left - next page
-                    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-                    if (currentPage < totalPages) {
-                        changePage(currentPage + 1);
-                    }
-                } else {
-                    // Swipe right - previous page
-                    if (currentPage > 1) {
-                        changePage(currentPage - 1);
-                    }
-                }
-            }
-
-            startX = 0;
-            startY = 0;
-        });
+        // Touch gestures for mobile - DISABLED
+        // Swipe navigation has been disabled to prevent accidental page changes
+        // Users must use pagination buttons to navigate between pages
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', async function() {
