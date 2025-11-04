@@ -409,6 +409,291 @@ class DatabaseManager {
             return false;
         }
     }
+
+    // ========== SALES OPERATIONS ==========
+
+    // Add customer
+    async addCustomer(customer) {
+        try {
+            const { data, error } = await this.supabase
+                .from('customers')
+                .insert([{
+                    customer_name: customer.customer_name,
+                    address: customer.address || null,
+                    phone: customer.phone || null,
+                    email: customer.email || null
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding customer:', error);
+            throw error;
+        }
+    }
+
+    // Get all customers
+    async getAllCustomers() {
+        try {
+            const { data, error } = await this.supabase
+                .from('customers')
+                .select('*')
+                .order('customer_name', { ascending: true });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error getting customers:', error);
+            return [];
+        }
+    }
+
+    // Search customers
+    async searchCustomers(query) {
+        try {
+            const { data, error } = await this.supabase
+                .from('customers')
+                .select('*')
+                .or(`customer_name.ilike.%${query}%,address.ilike.%${query}%,phone.ilike.%${query}%`)
+                .order('customer_name', { ascending: true });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error searching customers:', error);
+            return [];
+        }
+    }
+
+    // Get customer by ID
+    async getCustomerById(id) {
+        try {
+            const { data, error } = await this.supabase
+                .from('customers')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error getting customer:', error);
+            return null;
+        }
+    }
+
+    // Add sale
+    async addSale(sale) {
+        try {
+            // Generate invoice number if not provided
+            if (!sale.invoice_number) {
+                const { data: invoiceData } = await this.supabase
+                    .rpc('generate_invoice_number');
+                sale.invoice_number = invoiceData || await this.generateInvoiceNumberFallback();
+            }
+
+            const { data: saleData, error: saleError } = await this.supabase
+                .from('sales')
+                .insert([{
+                    invoice_number: sale.invoice_number,
+                    customer_id: sale.customer_id || null,
+                    customer_name: sale.customer_name || null,
+                    customer_address: sale.customer_address || null,
+                    sale_date: sale.sale_date || new Date().toISOString().split('T')[0],
+                    status: sale.status || 'draft',
+                    discount_amount: sale.discount_amount || 0,
+                    discount_percentage: sale.discount_percentage || 0,
+                    subtotal: sale.subtotal || 0,
+                    total_amount: sale.total_amount || 0,
+                    notes: sale.notes || null
+                }])
+                .select()
+                .single();
+
+            if (saleError) throw saleError;
+
+            // Add line items
+            if (sale.line_items && sale.line_items.length > 0) {
+                const lineItemsData = sale.line_items.map((item, index) => ({
+                    sale_id: saleData.id,
+                    product_id: item.product_id || null,
+                    product_name: item.product_name,
+                    quantity: item.quantity,
+                    unit: item.unit || 'Pcs',
+                    rate: item.rate,
+                    amount: item.amount,
+                    serial_number: index + 1
+                }));
+
+                const { error: itemsError } = await this.supabase
+                    .from('sales_line_items')
+                    .insert(lineItemsData);
+
+                if (itemsError) throw itemsError;
+            }
+
+            return await this.getSaleById(saleData.id);
+        } catch (error) {
+            console.error('Error adding sale:', error);
+            throw error;
+        }
+    }
+
+    // Generate invoice number fallback
+    async generateInvoiceNumberFallback() {
+        try {
+            const { data, error } = await this.supabase
+                .from('sales')
+                .select('invoice_number')
+                .order('id', { ascending: false })
+                .limit(1);
+
+            if (error || !data || data.length === 0) {
+                return '1';
+            }
+
+            const lastInvoice = data[0].invoice_number;
+            const lastNumber = parseInt(lastInvoice) || 0;
+            return String(lastNumber + 1);
+        } catch (error) {
+            return String(Date.now());
+        }
+    }
+
+    // Update sale
+    async updateSale(id, sale) {
+        try {
+            // Update sale
+            const { error: saleError } = await this.supabase
+                .from('sales')
+                .update({
+                    customer_id: sale.customer_id || null,
+                    customer_name: sale.customer_name || null,
+                    customer_address: sale.customer_address || null,
+                    sale_date: sale.sale_date || null,
+                    status: sale.status || 'draft',
+                    discount_amount: sale.discount_amount || 0,
+                    discount_percentage: sale.discount_percentage || 0,
+                    subtotal: sale.subtotal || 0,
+                    total_amount: sale.total_amount || 0,
+                    notes: sale.notes || null,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', id);
+
+            if (saleError) throw saleError;
+
+            // Update line items - delete existing and insert new
+            await this.supabase
+                .from('sales_line_items')
+                .delete()
+                .eq('sale_id', id);
+
+            if (sale.line_items && sale.line_items.length > 0) {
+                const lineItemsData = sale.line_items.map((item, index) => ({
+                    sale_id: id,
+                    product_id: item.product_id || null,
+                    product_name: item.product_name,
+                    quantity: item.quantity,
+                    unit: item.unit || 'Pcs',
+                    rate: item.rate,
+                    amount: item.amount,
+                    serial_number: index + 1
+                }));
+
+                const { error: itemsError } = await this.supabase
+                    .from('sales_line_items')
+                    .insert(lineItemsData);
+
+                if (itemsError) throw itemsError;
+            }
+
+            return await this.getSaleById(id);
+        } catch (error) {
+            console.error('Error updating sale:', error);
+            throw error;
+        }
+    }
+
+    // Get sale by ID
+    async getSaleById(id) {
+        try {
+            const { data: sale, error: saleError } = await this.supabase
+                .from('sales')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (saleError) throw saleError;
+
+            const { data: lineItems, error: itemsError } = await this.supabase
+                .from('sales_line_items')
+                .select('*')
+                .eq('sale_id', id)
+                .order('serial_number', { ascending: true });
+
+            if (itemsError) throw itemsError;
+
+            return {
+                ...sale,
+                line_items: lineItems || []
+            };
+        } catch (error) {
+            console.error('Error getting sale:', error);
+            return null;
+        }
+    }
+
+    // Get all sales
+    async getAllSales() {
+        try {
+            const { data: sales, error: saleError } = await this.supabase
+                .from('sales')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (saleError) throw saleError;
+
+            // Get line items for each sale
+            const salesWithItems = await Promise.all(
+                (sales || []).map(async (sale) => {
+                    const { data: lineItems } = await this.supabase
+                        .from('sales_line_items')
+                        .select('*')
+                        .eq('sale_id', sale.id)
+                        .order('serial_number', { ascending: true });
+
+                    return {
+                        ...sale,
+                        line_items: lineItems || []
+                    };
+                })
+            );
+
+            return salesWithItems;
+        } catch (error) {
+            console.error('Error getting sales:', error);
+            return [];
+        }
+    }
+
+    // Delete sale
+    async deleteSale(id) {
+        try {
+            const { error } = await this.supabase
+                .from('sales')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting sale:', error);
+            throw error;
+        }
+    }
 }
 
 // Create global instance
